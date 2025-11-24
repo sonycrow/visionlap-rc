@@ -48,6 +48,7 @@
                     <button id="settingsBtn" class="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded">
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     </button>
+                    <button id="cameraConfigBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white p-2 rounded text-sm">Config Cámara</button>
                 </div>
             </div>
             <!-- Panel Pilotos -->
@@ -164,6 +165,173 @@
             </form>
         </div>
     </div>
+
+    <!-- Camera Config Modal -->
+    <div id="cameraConfigModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-gray-800 rounded-lg p-6 w-full max-w-lg shadow-xl">
+            <h3 class="text-white text-xl mb-4">Configuración de Cámara</h3>
+            <form id="cameraConfigForm">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-300">Device (índice)</label>
+                        <input id="CAMERA_IDX" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" type="number" min="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300">FPS</label>
+                        <input id="CAMERA_FPS" type="number" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" min="1">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300">Width</label>
+                        <input id="CAMERA_WIDTH" type="number" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" min="1">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300">Height</label>
+                        <input id="CAMERA_HEIGHT" type="number" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" min="1">
+                    </div>
+
+                    <div class="col-span-2">
+                        <label class="block text-sm text-gray-300">Auto Focus</label>
+                        <select id="CAMERA_AUTOFOCUS" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100">
+                            <option value="">No cambiar</option>
+                            <option value="1">Activar (Auto)</option>
+                            <option value="0">Desactivar (Manual)</option>
+                        </select>
+                        <p class="text-xs text-gray-400 mt-1">Controla el autoenfoque del driver (si está soportado).</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-gray-300">Focus (manual)</label>
+                        <input id="CAMERA_FOCUS" type="range" min="0" max="255" class="w-full mt-1" />
+                        <div class="text-xs text-gray-400">Rango típico 0–255. Usar solo si Auto Focus está desactivado.</div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-gray-300">Auto Exposición</label>
+                        <select id="CAMERA_AUTO_EXPOSURE" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100">
+                            <option value="">No cambiar</option>
+                            <option value="3">Automático (driver=3)</option>
+                            <option value="1">Manual (driver=1)</option>
+                        </select>
+                        <p class="text-xs text-gray-400 mt-1">Nota: algunos drivers usan 1=manual y 3=auto (Windows/OpenCV).</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-gray-300">Exposición (manual)</label>
+                        <input id="CAMERA_EXPOSURE" type="range" min="-13" max="-1" class="w-full mt-1" />
+                        <div class="text-xs text-gray-400">Valores típicos negativos en algunos drivers. Usar junto a Auto Exposición=Manual.</div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-gray-300">Ganancia (Gain)</label>
+                        <input id="CAMERA_GAIN" type="range" min="0" max="255" class="w-full mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-gray-300">Brillo</label>
+                        <input id="CAMERA_BRIGHTNESS" type="range" min="0" max="255" class="w-full mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-gray-300">Contraste</label>
+                        <input id="CAMERA_CONTRAST" type="range" min="0" max="255" class="w-full mt-1" />
+                    </div>
+
+                    <div class="col-span-2 text-xs text-gray-400">
+                        <p>Consejo: Si no estás seguro, usa primero "No cambiar" y prueba valores pequeños. Algunos parámetros dependen del driver/cámara y pueden ser ignorados.</p>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end gap-4">
+                    <button type="button" id="cancelCameraConfig" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const cameraBtn = document.getElementById('cameraConfigBtn');
+        const cameraModal = document.getElementById('cameraConfigModal');
+        const cancelBtn = document.getElementById('cancelCameraConfig');
+        const form = document.getElementById('cameraConfigForm');
+
+        async function fetchCameraConfig() {
+            const res = await fetch('/api/camera-config');
+            if (!res.ok) return null;
+            return await res.json();
+        }
+
+        cameraBtn?.addEventListener('click', async () => {
+            const cfg = await fetchCameraConfig();
+                if (!cfg) return alert('No se pudo obtener la configuración de la cámara');
+                // Rellenar campos
+                document.getElementById('CAMERA_IDX').value = cfg.CAMERA_IDX ?? '';
+                const res = cfg.CAMERA_RESOLUTION ?? [];
+                document.getElementById('CAMERA_WIDTH').value = Array.isArray(res) ? (res[0] ?? '') : (res[0] ?? '');
+                document.getElementById('CAMERA_HEIGHT').value = Array.isArray(res) ? (res[1] ?? '') : (res[1] ?? '');
+                document.getElementById('CAMERA_FPS').value = cfg.CAMERA_FPS ?? '';
+                // Autofocus/selects
+                document.getElementById('CAMERA_AUTOFOCUS').value = (typeof cfg.CAMERA_AUTOFOCUS !== 'undefined' && cfg.CAMERA_AUTOFOCUS !== null) ? String(cfg.CAMERA_AUTOFOCUS) : '';
+                if (cfg.CAMERA_FOCUS !== undefined && cfg.CAMERA_FOCUS !== null) document.getElementById('CAMERA_FOCUS').value = cfg.CAMERA_FOCUS;
+                // Auto exposure mapping
+                document.getElementById('CAMERA_AUTO_EXPOSURE').value = (typeof cfg.CAMERA_AUTO_EXPOSURE !== 'undefined' && cfg.CAMERA_AUTO_EXPOSURE !== null) ? String(cfg.CAMERA_AUTO_EXPOSURE) : '';
+                if (cfg.CAMERA_EXPOSURE !== undefined && cfg.CAMERA_EXPOSURE !== null) document.getElementById('CAMERA_EXPOSURE').value = cfg.CAMERA_EXPOSURE;
+                if (cfg.CAMERA_GAIN !== undefined && cfg.CAMERA_GAIN !== null) document.getElementById('CAMERA_GAIN').value = cfg.CAMERA_GAIN;
+                if (cfg.CAMERA_BRIGHTNESS !== undefined && cfg.CAMERA_BRIGHTNESS !== null) document.getElementById('CAMERA_BRIGHTNESS').value = cfg.CAMERA_BRIGHTNESS;
+                if (cfg.CAMERA_CONTRAST !== undefined && cfg.CAMERA_CONTRAST !== null) document.getElementById('CAMERA_CONTRAST').value = cfg.CAMERA_CONTRAST;
+            cameraModal.classList.remove('hidden');
+        });
+
+        cancelBtn?.addEventListener('click', () => cameraModal.classList.add('hidden'));
+
+        form?.addEventListener('submit', async (ev) => {
+            ev.preventDefault();
+            const payload = {};
+            const idx = document.getElementById('CAMERA_IDX').value;
+            if (idx !== '') payload.CAMERA_IDX = parseInt(idx);
+            const w = document.getElementById('CAMERA_WIDTH').value;
+            const h = document.getElementById('CAMERA_HEIGHT').value;
+            if (w !== '' && h !== '') payload.CAMERA_RESOLUTION = [parseInt(w), parseInt(h)];
+            const fps = document.getElementById('CAMERA_FPS').value;
+            if (fps !== '') payload.CAMERA_FPS = parseInt(fps);
+
+            // Autofocus: '' -> no cambiar, '1' -> activar, '0' -> desactivar
+            const af = document.getElementById('CAMERA_AUTOFOCUS').value;
+            if (af !== '') payload.CAMERA_AUTOFOCUS = parseInt(af);
+
+            // Focus manual
+            const focus = document.getElementById('CAMERA_FOCUS').value;
+            if (focus !== '') payload.CAMERA_FOCUS = parseInt(focus);
+
+            // Auto exposure select: '' -> no cambiar, '3' -> auto, '1' -> manual
+            const ae = document.getElementById('CAMERA_AUTO_EXPOSURE').value;
+            if (ae !== '') payload.CAMERA_AUTO_EXPOSURE = parseInt(ae);
+
+            // Exposure value (manual)
+            const exposure = document.getElementById('CAMERA_EXPOSURE').value;
+            if (exposure !== '') payload.CAMERA_EXPOSURE = parseInt(exposure);
+
+            // Gain / Brightness / Contrast
+            const gain = document.getElementById('CAMERA_GAIN').value;
+            if (gain !== '') payload.CAMERA_GAIN = parseInt(gain);
+            const bright = document.getElementById('CAMERA_BRIGHTNESS').value;
+            if (bright !== '') payload.CAMERA_BRIGHTNESS = parseInt(bright);
+            const contrast = document.getElementById('CAMERA_CONTRAST').value;
+            if (contrast !== '') payload.CAMERA_CONTRAST = parseInt(contrast);
+
+            const resp = await fetch('/api/camera-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                cameraModal.classList.add('hidden');
+                alert('Configuración guardada. El detector se reconfigurará automáticamente si estaba activo.');
+            } else {
+                alert('Error guardando configuración: ' + (data.error || resp.statusText));
+            }
+        });
+    </script>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

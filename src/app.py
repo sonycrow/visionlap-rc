@@ -2,6 +2,7 @@ from flask import Flask, render_template, Response, request, jsonify
 from flask_socketio import SocketIO
 from src.models import db, Driver, Session, Lap
 from src.detector import RaceSystem
+from src import camera_config_store as camcfg
 from flask_migrate import Migrate
 import eventlet
 import os
@@ -19,11 +20,19 @@ migrate = Migrate(app, db)
 # Usar eventlet para concurrencia asíncrona compatible con WebSockets
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins='*')
 
-# Instanciar el sistema de visión usando configuración
-camera_idx = app.config.get('CAMERA_IDX', 0)
-camera_resolution = app.config.get('CAMERA_RESOLUTION', (640, 480))
-finish_line = app.config.get('FINISH_LINE', ((100, 240), (540, 240)))
+# Cargar o crear configuración persistente de cámara (desde .env -> config.py la primera vez)
+camcfg.load_or_create_from_module_config(app.config)
+camera_cfg = camcfg.get_current() or {}
 
+# Instanciar el sistema de visión usando la configuración persistente
+camera_idx = int(camera_cfg.get('CAMERA_IDX', app.config.get('CAMERA_IDX', 0)))
+res = camera_cfg.get('CAMERA_RESOLUTION', app.config.get('CAMERA_RESOLUTION', (640, 480)))
+if isinstance(res, list):
+    camera_resolution = (int(res[0]), int(res[1]))
+else:
+    camera_resolution = res
+
+finish_line = camera_cfg.get('FINISH_LINE', app.config.get('FINISH_LINE', ((100, 240), (540, 240))))
 vision_system = RaceSystem(camera_idx=camera_idx, resolution=camera_resolution, finish_line=finish_line)
 
 # Callback que se ejecuta cuando el detector ve una vuelta
@@ -186,6 +195,26 @@ def detector_status():
     try:
         running = bool(getattr(vision_system, 'running', False))
         return jsonify({'running': running})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/camera-config', methods=['GET'])
+def api_get_camera_config():
+    try:
+        cfg = camcfg.get_current() or {}
+        return jsonify(cfg)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/camera-config', methods=['POST'])
+def api_set_camera_config():
+    try:
+        data = request.get_json(force=True) or {}
+        # Guardar y aplicar. camcfg.save_and_apply reiniciará el detector si está en marcha
+        updated = camcfg.save_and_apply(data, vision_system=vision_system)
+        return jsonify({'ok': True, 'camera_config': updated})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
