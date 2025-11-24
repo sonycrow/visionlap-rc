@@ -1,0 +1,8 @@
+flask
+flask-socketio
+flask-sqlalchemy
+opencv-python
+pupil-apriltags
+eventlet
+gunicorn
+Flask-Migrate
