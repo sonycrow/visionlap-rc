@@ -77,6 +77,21 @@ def handle_new_lap(tag_id, lap_time):
 # Conectar callback
 vision_system.on_lap_callback = handle_new_lap
 
+
+def refresh_allowed_tags():
+    """Leer los tags de la base de datos y actualizar el filtro del detector."""
+    try:
+        with app.app_context():
+            tags = [d.tag_id for d in Driver.query.all() if d.tag_id is not None]
+            # Normalizar int
+            tags = [int(t) for t in tags]
+            vision_system.set_allowed_tags(tags)
+    except Exception as e:
+        print(f"Error actualizando allowed_tags: {e}")
+
+# Inicializar allowed_tags con los pilotos actuales
+refresh_allowed_tags()
+
 # Rutas Flask
 @app.route('/')
 def index():
@@ -90,6 +105,11 @@ def add_driver():
         new_driver = Driver(name=data['name'], nickname=data['nickname'], tag_id=data['tag_id'])
         db.session.add(new_driver)
         db.session.commit()
+        # Refrescar tags permitidos en el detector
+        try:
+            refresh_allowed_tags()
+        except Exception:
+            pass
         return jsonify({'status': 'ok'}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -135,6 +155,11 @@ def update_driver(driver_id):
         if 'tag_id' in data:
             driver.tag_id = data['tag_id']
         db.session.commit()
+        # Refrescar tags permitidos
+        try:
+            refresh_allowed_tags()
+        except Exception:
+            pass
         return jsonify({'status': 'ok', 'driver': driver.to_dict()})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -146,6 +171,11 @@ def delete_driver(driver_id):
         driver = Driver.query.get_or_404(driver_id)
         db.session.delete(driver)
         db.session.commit()
+        # Refrescar tags permitidos
+        try:
+            refresh_allowed_tags()
+        except Exception:
+            pass
         return jsonify({'status': 'deleted'})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
