@@ -11,89 +11,159 @@
          .lap-time-display { font-family: 'Courier New', monospace; font-weight: bold; font-size: 1.25rem; color: #f59e0b; }
          /* Pequeñas reglas para el feed de vídeo (tailwind no gestiona contenido inline) */
          .video-feed { width: 100%; height: auto; display: block; }
+         .semaphore-light { transition: background-color 0.2s; }
+         .semaphore-light.red { background-color: #ef4444; }
+         .semaphore-light.off { background-color: #374151; } /* gray-700 */
+         .semaphore-light.green { background-color: #22c55e; }
      </style>
 </head>
-<body>
-    <header class="bg-gray-900 text-white p-4 mb-6">
-        <div class="container mx-auto">
-            <div class="flex items-center">
-                <span class="text-xl font-semibold">🏁 VisionLap RC</span>
-            </div>
+
+<body class="bg-gray-900 text-white h-screen flex flex-col overflow-hidden">
+    
+    <header class="bg-gray-800 shadow-md p-2">
+        <div class="container px-4">
+            <span class="text-xl font-semibold">🏁 VisionLap RC</span>
         </div>
     </header>
 
-    <main class="container mx-auto px-4">
-        <div class="flex flex-col lg:flex-row gap-6">
-            <div class="lg:w-1/3 w-full">
-                <div class="bg-gray-800 rounded-lg p-4 mb-4 shadow">
-                    <h5 class="text-gray-100 font-medium mb-3">Cámara en Vivo</h5>
-                    <div id="videoWrap" class="relative border-2 border-gray-700 rounded overflow-hidden bg-black">
-                        <img id="videoFeed" src="{{ url_for('video_feed') }}" class="video-feed" alt="Esperando Video...">
-                        <div id="detectorOverlay" class="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-lg font-semibold hidden">
-                            Detector detenido
-                        </div>
-                    </div>
-                    <div class="mt-3 flex items-center gap-3">
-                        <button id="detectorToggle" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded">Activar detector</button>
-                        <div id="detectorStatus" class="text-sm text-gray-300">Estado: desconocido</div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3 mt-4">
-                        <button onclick="startSession()" class="bg-green-600 hover:bg-green-700 text-white py-2 rounded">Iniciar Carrera</button>
-                        <button onclick="stopSession()" class="bg-red-600 hover:bg-red-700 text-white py-2 rounded">Detener</button>
+    <main class="flex-grow flex p-4 gap-4">
+        <!-- Columna Izquierda -->
+        <div class="w-1/3 flex flex-col gap-4">
+            <!-- Panel Cámara -->
+            <div class="bg-gray-800 rounded-lg p-3 shadow-lg flex flex-col">
+                <h5 class="text-gray-100 font-medium mb-2 text-center">Cámara en vivo</h5>
+                <div id="videoWrap" class="relative border-2 border-gray-700 rounded overflow-hidden bg-black flex-grow">
+                    <img id="videoFeed" src="{{ url_for('video_feed') }}" class="object-cover h-full w-full" alt="Esperando Video...">
+                    <div id="detectorOverlay" class="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-lg font-semibold hidden">
+                        Detector detenido
                     </div>
                 </div>
-
-                <div class="bg-gray-800 rounded-lg p-4 shadow">
-                    <h5 class="text-gray-100 font-medium mb-3">Gestión de Pilotos</h5>
-                    <form id="driverForm" class="space-y-3">
-                        <input type="text" id="dName" placeholder="Nombre" class="w-full px-3 py-2 rounded bg-gray-700 text-gray-100" />
-                        <input type="text" id="dNick" placeholder="Nickname (3 letras)" class="w-full px-3 py-2 rounded bg-gray-700 text-gray-100" />
-                        <input type="number" id="dTag" placeholder="Tag ID (0-29)" class="w-full px-3 py-2 rounded bg-gray-700 text-gray-100" />
-                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded">Registrar</button>
-                    </form>
-                    <div class="mt-4">
-                        <h6 class="text-gray-200 font-medium mb-2">Pilotos registrados</h6>
-                        <div class="flex items-center gap-2 mb-2">
-                            <input id="driversSearch" type="text" placeholder="Buscar piloto..." class="flex-1 px-3 py-2 rounded bg-gray-700 text-gray-100 text-sm" />
-                            <button id="driversReload" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm">Buscar</button>
-                        </div>
-                        <ul id="driversList" class="space-y-2 text-gray-200 text-sm">
-                            <!-- Items se insertan desde JS -->
-                        </ul>
-                        <div class="mt-3 flex items-center justify-between text-sm text-gray-400">
-                            <div id="driversPagerInfo"></div>
-                            <div class="space-x-2">
-                                <button id="driversPrev" class="px-2 py-1 bg-gray-700 rounded">◀</button>
-                                <button id="driversNext" class="px-2 py-1 bg-gray-700 rounded">▶</button>
-                            </div>
-                        </div>
-                    </div>
+                <div class="mt-3 flex items-center gap-3">
+                    <button id="detectorToggle" class="flex-1 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm">Activar detector</button>
+                    <div id="detectorStatus" class="text-sm text-gray-300">Estado: desconocido</div>
+                </div>
+                 <div class="flex items-center gap-3 mt-3">
+                    <button onclick="startSession()" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded">Iniciar</button>
+                    <button onclick="stopSession()" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded">Detener</button>
+                    <button id="settingsBtn" class="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    </button>
                 </div>
             </div>
-
-            <div class="lg:w-2/3 w-full">
-                <div class="bg-gray-800 rounded-lg p-4 shadow">
-                    <h3 class="text-center text-gray-100 mb-4">Tabla de Posiciones</h3>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full text-left text-gray-200">
-                            <thead class="text-gray-400 text-sm uppercase">
-                                <tr>
-                                    <th class="px-4 py-2">Pos</th>
-                                    <th class="px-4 py-2">Piloto</th>
-                                    <th class="px-4 py-2">Vueltas</th>
-                                    <th class="px-4 py-2">Última</th>
-                                    <th class="px-4 py-2">Mejor</th>
-                                    <th class="px-4 py-2">Gap</th>
-                                </tr>
-                            </thead>
-                            <tbody id="leaderboardBody" class="divide-y divide-gray-700">
-                            </tbody>
-                        </table>
+            <!-- Panel Pilotos -->
+            <div class="bg-gray-800 rounded-lg p-3 shadow-lg flex-grow flex flex-col">
+                 <div class="flex justify-between items-center mb-2">
+                     <h5 class="text-gray-100 font-medium">Pilotos registrados</h5>
+                     <button id="addDriverBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">Registrar</button>
+                 </div>
+                <div class="flex items-center gap-2 mb-2">
+                    <input id="driversSearch" type="text" placeholder="Buscar..." class="flex-1 px-3 py-1 rounded bg-gray-700 text-gray-100 text-sm">
+                    <button id="driversReload" class="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-white text-sm">Buscar</button>
+                </div>
+                <ul id="driversList" class="space-y-2 text-gray-200 text-sm flex-grow overflow-y-auto pr-1">
+                    <!-- JS Inserted -->
+                </ul>
+                <div class="mt-2 flex items-center justify-between text-xs text-gray-400">
+                    <div id="driversPagerInfo"></div>
+                    <div class="space-x-1">
+                        <button id="driversPrev" class="px-2 py-1 bg-gray-700 rounded">◀</button>
+                        <button id="driversNext" class="px-2 py-1 bg-gray-700 rounded">▶</button>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Columna Derecha -->
+        <div class="w-2/3 flex flex-col bg-gray-800 rounded-lg p-3 shadow-lg">
+            <div id="raceStatusBlock" class="bg-gray-700 p-2 rounded-lg mb-2 text-center">
+                <p class="text-gray-300 text-sm">La carrera no ha comenzado. Haz clic en "Iniciar carrera" para empezar.</p>
+            </div>
+            <h3 class="text-center text-gray-100 font-medium mb-2">Tabla de posiciones</h3>
+            <div class="overflow-y-auto flex-grow">
+                <table class="min-w-full text-left text-gray-200 text-sm">
+                    <thead class="text-gray-400 text-xs uppercase sticky top-0 bg-gray-800">
+                        <tr>
+                            <th class="px-3 py-2">Pos</th>
+                            <th class="px-3 py-2">Piloto</th>
+                            <th class="px-3 py-2">Vueltas</th>
+                            <th class="px-3 py-2">Última</th>
+                            <th class="px-3 py-2">Mejor</th>
+                            <th class="px-3 py-2">Gap</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardBody" class="divide-y divide-gray-700">
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </main>
+
+    <!-- Semaforo Overlay -->
+    <div id="semaphoreOverlay" class="fixed inset-0 bg-black bg-opacity-90 flex-col items-center justify-center text-white text-9xl font-bold hidden">
+        <div id="semaphoreLights" class="flex space-x-4 mb-8">
+            <div class="semaphore-light w-24 h-24 rounded-full bg-gray-700"></div>
+            <div class="semaphore-light w-24 h-24 rounded-full bg-gray-700"></div>
+            <div class="semaphore-light w-24 h-24 rounded-full bg-gray-700"></div>
+            <div class="semaphore-light w-24 h-24 rounded-full bg-gray-700"></div>
+            <div class="semaphore-light w-24 h-24 rounded-full bg-gray-700"></div>
+        </div>
+        <div id="semaphoreTimer">10</div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-xl">
+            <h3 class="text-white text-xl mb-4">Opciones de Carrera</h3>
+            <form id="settingsForm">
+                <div class="space-y-4">
+                    <div>
+                        <label for="prepTime" class="block text-sm font-medium text-gray-300">Tiempo de preparación de parrilla (segundos)</label>
+                        <input type="number" id="prepTime" name="prepTime" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label for="maxTime" class="block text-sm font-medium text-gray-300">Tiempo máximo de carrera (minutos)</label>
+                        <input type="number" id="maxTime" name="maxTime" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label for="maxLaps" class="block text-sm font-medium text-gray-300">Número de vueltas</label>
+                        <input type="number" id="maxLaps" name="maxLaps" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end gap-4">
+                    <button type="button" id="cancelSettings" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Driver Modal -->
+    <div id="addDriverModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-xl">
+            <h3 id="driverModalTitle" class="text-white text-xl mb-4">Registrar Nuevo Piloto</h3>
+            <form id="driverForm">
+                <input type="hidden" id="dId" name="dId">
+                <div class="space-y-4">
+                    <div>
+                        <label for="dName" class="block text-sm font-medium text-gray-300">Nombre</label>
+                        <input type="text" id="dName" placeholder="Nombre completo del piloto" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label for="dNick" class="block text-sm font-medium text-gray-300">Nickname (3 letras)</label>
+                        <input type="text" id="dNick" placeholder="AAA" maxlength="3" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label for="dTag" class="block text-sm font-medium text-gray-300">Tag ID (0-29)</label>
+                        <input type="number" id="dTag" placeholder="ID del tag de AprilTag" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end gap-4">
+                    <button type="button" id="cancelDriver" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Registrar Piloto</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

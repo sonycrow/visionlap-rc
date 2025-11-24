@@ -67,6 +67,15 @@ class RaceSystem:
         # Callbacks para notificar a la app principal
         self.on_lap_callback = None
 
+    def _set_cam_prop(self, prop, value, name):
+        """Intenta establecer una propiedad de la cámara y notifica si falla."""
+        if value != -1:
+            try:
+                self.cap.set(prop, value)
+                print(f"Cámara: {name} establecido a {value}.")
+            except Exception as e:
+                print(f"Cámara: No se pudo establecer {name} a {value}. Error: {e}")
+
     def start(self):
         if self.running:
             return
@@ -82,19 +91,34 @@ class RaceSystem:
             # Si el bind falla, otro proceso ya tiene la cámara/lock
             print(f"No se inicia detector: puerto lock en uso ({e})")
             return
+            
         # Si la cámara no está abierta, (re)abrirla
         try:
             if not (self.cap and getattr(self.cap, 'isOpened', lambda: False)()):
                 self.cap = cv2.VideoCapture(self.camera_idx, cv2.CAP_DSHOW)
-                # Establecer ancho/alto
-                try:
-                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
-                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
-                    self.cap.set(cv2.CAP_PROP_FPS, 60)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+
+                # --- Configuración de la Cámara ---
+                # Básica
+                self._set_cam_prop(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0], "Ancho")
+                self._set_cam_prop(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1], "Alto")
+                self._set_cam_prop(cv2.CAP_PROP_FPS, config.CAMERA_FPS, "FPS")
+                
+                # Avanzada (depende de la cámara/driver)
+                self._set_cam_prop(cv2.CAP_PROP_AUTOFOCUS, config.CAMERA_AUTOFOCUS, "Autoenfoque")
+                self._set_cam_prop(cv2.CAP_PROP_FOCUS, config.CAMERA_FOCUS, "Enfoque")
+                self._set_cam_prop(cv2.CAP_PROP_AUTO_EXPOSURE, config.CAMERA_AUTO_EXPOSURE, "Exposición Automática")
+                self._set_cam_prop(cv2.CAP_PROP_EXPOSURE, config.CAMERA_EXPOSURE, "Exposición")
+                self._set_cam_prop(cv2.CAP_PROP_GAIN, config.CAMERA_GAIN, "Ganancia")
+                self._set_cam_prop(cv2.CAP_PROP_BRIGHTNESS, config.CAMERA_BRIGHTNESS, "Brillo")
+                self._set_cam_prop(cv2.CAP_PROP_CONTRAST, config.CAMERA_CONTRAST, "Contraste")
+
+        except Exception as e:
+            print(f"Error fatal al abrir o configurar la cámara: {e}")
+            # Liberar el lock si la cámara falla
+            if self._lock_sock:
+                self._lock_sock.close()
+                self._lock_sock = None
+            return
 
         self.running = True
         t = Thread(target=self._process_loop)

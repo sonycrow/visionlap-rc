@@ -34,6 +34,11 @@ function renderLeaderboard() {
         return b.laps - a.laps; 
     });
 
+    if (sortedDrivers.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-gray-500">No hay registros para mostrar</td></tr>`;
+        return;
+    }
+
     sortedDrivers.forEach((d, index) => {
         let row = `<tr class="bg-gray-800 hover:bg-gray-700">
             <td class="px-4 py-2">${index + 1}</td>
@@ -48,31 +53,328 @@ function renderLeaderboard() {
 }
 
 // Gestión del formulario de pilotos
-const driverForm = document.getElementById('driverForm');
-if (driverForm) {
-    driverForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const data = {
-            name: document.getElementById('dName').value,
-            nickname: document.getElementById('dNick').value,
-            tag_id: parseInt(document.getElementById('dTag').value)
-        };
-        
-        await fetch('/api/drivers', {
-            method: 'POST',
+
+// La lógica del formulario se activa ahora desde un modal
+
+
+
+// Elementos de UI para la carrera
+
+let raceStatusBlock;
+
+let semaphoreOverlay, semaphoreLights, semaphoreTimer;
+
+let settingsModal, settingsForm, prepTimeInput, maxTimeInput, maxLapsInput;
+
+let addDriverModal, driverForm;
+
+
+
+// Configuración de la carrera (con valores por defecto)
+
+let prepTime = 60;
+
+let maxTime = 5; // en minutos
+
+let maxLaps = 10;
+
+
+
+// Estado de la carrera
+
+const RACE_STATE = {
+
+    IDLE: 'idle',
+
+    PREPARING: 'preparing',
+
+    STARTING: 'starting',
+
+    RUNNING: 'running',
+
+    FINISHED: 'finished'
+
+};
+
+let currentRaceState = RACE_STATE.IDLE;
+
+let gridCountdownInterval, semaphoreCountdownInterval, raceTimerInterval;
+
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Elementos de carrera
+    raceStatusBlock = document.getElementById('raceStatusBlock');
+    semaphoreOverlay = document.getElementById('semaphoreOverlay');
+    semaphoreLights = document.getElementById('semaphoreLights').children;
+    semaphoreTimer = document.getElementById('semaphoreTimer');
+
+    // Elementos del modal de opciones
+    settingsModal = document.getElementById('settingsModal');
+    settingsForm = document.getElementById('settingsForm');
+    prepTimeInput = document.getElementById('prepTime');
+    maxTimeInput = document.getElementById('maxTime');
+    maxLapsInput = document.getElementById('maxLaps');
+
+    const settingsBtn = document.getElementById('settingsBtn');
+    const cancelSettingsBtn = document.getElementById('cancelSettings');
+
+    settingsBtn.addEventListener('click', openSettingsModal);
+    cancelSettingsBtn.addEventListener('click', closeSettingsModal);
+    settingsForm.addEventListener('submit', handleSettingsSave);
+
+    // Elementos del modal de piloto
+    addDriverModal = document.getElementById('addDriverModal');
+    driverForm = document.getElementById('driverForm');
+    const addDriverBtn = document.getElementById('addDriverBtn');
+    const cancelDriverBtn = document.getElementById('cancelDriver');
+
+    addDriverBtn.addEventListener('click', () => openDriverModal()); // Abrir en modo creación
+    cancelDriverBtn.addEventListener('click', closeDriverModal);
+    driverForm.addEventListener('submit', handleDriverSave);
+});
+
+function openSettingsModal() {
+    if (currentRaceState !== RACE_STATE.IDLE) {
+        console.log("No se pueden cambiar las opciones mientras una carrera está en curso.");
+        return;
+    }
+    prepTimeInput.value = prepTime;
+    maxTimeInput.value = maxTime;
+    maxLapsInput.value = maxLaps;
+    settingsModal.classList.remove('hidden');
+}
+
+function closeSettingsModal() {
+    settingsModal.classList.add('hidden');
+}
+
+function handleSettingsSave(e) {
+    e.preventDefault();
+    prepTime = parseInt(prepTimeInput.value, 10) || 60;
+    maxTime = parseInt(maxTimeInput.value, 10) || 5;
+    maxLaps = parseInt(maxLapsInput.value, 10) || 10;
+    console.log("Opciones guardadas:", { prepTime, maxTime, maxLaps });
+    closeSettingsModal();
+}
+
+function openDriverModal(driver = null) {
+    const modalTitle = document.getElementById('driverModalTitle');
+    const submitButton = driverForm.querySelector('button[type="submit"]');
+
+    driverForm.reset(); // Limpiar el formulario
+
+    if (driver) {
+        // Modo Edición
+        modalTitle.textContent = 'Editar Piloto';
+        submitButton.textContent = 'Guardar Cambios';
+        document.getElementById('dId').value = driver.id;
+        document.getElementById('dName').value = driver.name;
+        document.getElementById('dNick').value = driver.nickname;
+        document.getElementById('dTag').value = driver.tag_id;
+    } else {
+        // Modo Creación
+        modalTitle.textContent = 'Registrar Nuevo Piloto';
+        submitButton.textContent = 'Registrar Piloto';
+        document.getElementById('dId').value = '';
+    }
+    addDriverModal.classList.remove('hidden');
+}
+
+function closeDriverModal() {
+    addDriverModal.classList.add('hidden');
+}
+
+async function handleDriverSave(e) {
+    e.preventDefault();
+    const driverId = document.getElementById('dId').value;
+    const data = {
+        name: document.getElementById('dName').value,
+        nickname: document.getElementById('dNick').value,
+        tag_id: parseInt(document.getElementById('dTag').value)
+    };
+
+    // Simple validation
+    if (!data.name || !data.nickname || isNaN(data.tag_id)) {
+        alert("Por favor, completa todos los campos correctamente.");
+        return;
+    }
+
+    const isEdit = Boolean(driverId);
+    const url = isEdit ? `/api/drivers/${driverId}` : '/api/drivers';
+    const method = isEdit ? 'PUT' : 'POST';
+
+    try {
+        const res = await fetch(url, {
+            method: method,
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data)
         });
-        alert('Piloto registrado');
-        driverForm.reset();
-        // Refrescar lista de pilotos tras registrar uno nuevo
-        await fetchDrivers();
-    });
+
+        if (res.ok) {
+            console.log(isEdit ? 'Piloto actualizado' : 'Piloto registrado');
+            closeDriverModal();
+            await fetchDrivers(driversPage, driversQuery); // Recargar la página actual de pilotos
+        } else {
+            const err = await res.json();
+            console.log('Error: ' + (err.error || 'Ocurrió un error desconocido.'));
+        }
+    } catch (e) {
+        console.error('Error guardando piloto:', e);
+        console.log('Error de conexión al guardar el piloto.');
+    }
+}
+
+function updateRaceStatus(message) {
+    raceStatusBlock.innerHTML = message;
+}
+
+function stopSession() {
+    // Detener todos los intervalos
+    clearInterval(gridCountdownInterval);
+    clearInterval(semaphoreCountdownInterval);
+    clearInterval(raceTimerInterval);
+
+    // Ocultar semáforo
+    semaphoreOverlay.classList.add('hidden');
+    semaphoreOverlay.classList.remove('flex');
+    
+    // Resetear estado
+    currentRaceState = RACE_STATE.IDLE;
+    driversData = {};
+    renderLeaderboard();
+    updateRaceStatus('<p class="text-gray-300">Carrera detenida. Haz clic en "Iniciar carrera" para empezar de nuevo.</p>');
+    
+    // Aquí también se podría llamar a una API para detener la sesión en el backend
+    fetch('/api/session/stop', {method: 'POST'});
+    console.log("Sesión detenida por el usuario.");
 }
 
 async function startSession() {
-    await fetch('/api/session/start', {method: 'POST'});
+    if (currentRaceState !== RACE_STATE.IDLE) {
+        console.log("La carrera ya está en progreso o iniciándose.");
+        return;
+    }
+    
+    console.log("Iniciando secuencia de carrera...");
+    currentRaceState = RACE_STATE.PREPARING;
+    
+    let gridTime = prepTime;
+    updateRaceStatus(`
+        <h4 class="text-xl font-bold text-yellow-400 mb-2">¡Prepara la parrilla de salida!</h4>
+        <p class="text-gray-200">Tiempo restante: <span class="font-mono text-2xl">${gridTime}</span>s</p>
+    `);
+    
+    gridCountdownInterval = setInterval(() => {
+        gridTime--;
+        updateRaceStatus(`
+            <h4 class="text-xl font-bold text-yellow-400 mb-2">¡Prepara la parrilla de salida!</h4>
+            <p class="text-gray-200">Tiempo restante: <span class="font-mono text-2xl">${gridTime}</span>s</p>
+        `);
+        if (gridTime <= 0) {
+            clearInterval(gridCountdownInterval);
+            startSemaphoreCountdown();
+        }
+    }, 1000);
 }
+
+function startSemaphoreCountdown() {
+    console.log("Iniciando cuenta atrás del semáforo...");
+    currentRaceState = RACE_STATE.STARTING;
+    
+    semaphoreOverlay.classList.remove('hidden');
+    semaphoreOverlay.classList.add('flex');
+
+    let semaphoreTime = 10;
+    
+    const updateLights = (count) => {
+        for (let i = 0; i < semaphoreLights.length; i++) {
+            if (i < count) {
+                semaphoreLights[i].classList.add('red');
+            } else {
+                semaphoreLights[i].classList.remove('red');
+            }
+        }
+    };
+    
+    // Resetear luces
+    for(const light of semaphoreLights) {
+        light.classList.remove('red', 'green');
+    }
+    
+    semaphoreCountdownInterval = setInterval(() => {
+        semaphoreTimer.textContent = semaphoreTime;
+        
+        if (semaphoreTime <= 5 && semaphoreTime > 0) {
+            // Encender una luz roja por segundo
+            updateLights(6 - semaphoreTime);
+        }
+
+        if (semaphoreTime === 0) {
+            clearInterval(semaphoreCountdownInterval);
+            console.log("¡Carrera iniciada!");
+
+            // Apagar luces rojas y encender verdes
+            for(const light of semaphoreLights) {
+                light.classList.remove('red');
+                light.classList.add('green');
+            }
+            
+            // Ocultar semáforo y empezar carrera tras un breve instante
+            setTimeout(() => {
+                semaphoreOverlay.classList.add('hidden');
+                semaphoreOverlay.classList.remove('flex');
+                startRace();
+            }, 1000); // Muestra las luces verdes por 1 segundo
+        }
+        
+        semaphoreTime--;
+        
+    }, 1000);
+}
+
+async function startRace() {
+    await fetch('/api/session/start', {method: 'POST'});
+    currentRaceState = RACE_STATE.RUNNING;
+    console.log("La carrera está en marcha.");
+    
+    let raceTime = maxTime * 60; // Convertir minutos a segundos
+    
+    const formatTime = (seconds) => {
+        const min = Math.floor(seconds / 60);
+        const sec = seconds % 60;
+        return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    };
+
+    updateRaceStatus(`
+        <div class="flex justify-around items-center">
+            <div>
+                <h5 class="text-sm uppercase text-gray-400">Tiempo de Carrera</h5>
+                <p class="font-mono text-3xl text-green-400">${formatTime(raceTime)}</p>
+            </div>
+            <div>
+                <h5 class="text-sm uppercase text-gray-400">Vueltas Máximas</h5>
+                <p class="font-mono text-3xl">${maxLaps}</p>
+            </div>
+        </div>
+    `);
+
+    raceTimerInterval = setInterval(() => {
+        raceTime--;
+        // Actualizar solo el tiempo para evitar redibujar todo el bloque
+        const timeElement = raceStatusBlock.querySelector('.text-green-400');
+        if (timeElement) timeElement.textContent = formatTime(raceTime);
+
+        if (raceTime <= 0) {
+            clearInterval(raceTimerInterval);
+            currentRaceState = RACE_STATE.FINISHED;
+            console.log("La carrera ha terminado (tiempo agotado).");
+            updateRaceStatus('<h4 class="text-xl font-bold text-red-500">¡CARRERA FINALIZADA!</h4>');
+            stopSession();
+        }
+    }, 1000);
+}
+
 
 // Obtener y renderizar pilotos registrados
 // Paginación y búsqueda
@@ -112,7 +414,7 @@ function renderDrivers(drivers) {
         const editBtn = document.createElement('button');
         editBtn.className = 'px-2 py-1 bg-yellow-500 hover:bg-yellow-600 rounded text-xs';
         editBtn.textContent = 'Editar';
-        editBtn.onclick = () => editDriver(d);
+        editBtn.onclick = () => openDriverModal(d); // <- Cambio aquí
         const delBtn = document.createElement('button');
         delBtn.className = 'px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs';
         delBtn.textContent = 'Borrar';
@@ -135,41 +437,15 @@ function renderDriversPager() {
     if (next) next.disabled = driversPage >= driversTotalPages;
 }
 
-// editar piloto (prompt simple)
-async function editDriver(driver) {
-    const name = prompt('Nombre:', driver.name);
-    if (name === null) return;
-    const nickname = prompt('Nickname:', driver.nickname);
-    if (nickname === null) return;
-    const tag = prompt('Tag ID:', driver.tag_id);
-    if (tag === null) return;
-    try {
-        const res = await fetch(`/api/drivers/${driver.id}`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ name: name, nickname: nickname, tag_id: parseInt(tag) })
-        });
-        if (res.ok) {
-            await fetchDrivers(driversPage, driversQuery);
-            alert('Piloto actualizado');
-        } else {
-            const err = await res.json();
-            alert('Error: ' + (err.error || 'unknown'));
-        }
-    } catch (e) {
-        console.error(e);
-    }
-}
-
 async function deleteDriverConfirm(driver) {
-    if (!confirm(`¿Borrar piloto ${driver.name} (${driver.nickname})?`)) return;
+    //if (!confirm(`¿Borrar piloto ${driver.name} (${driver.nickname})?`)) return;
     try {
         const res = await fetch(`/api/drivers/${driver.id}`, { method: 'DELETE' });
         if (res.ok) {
             await fetchDrivers(driversPage, driversQuery);
         } else {
             const err = await res.json();
-            alert('Error: ' + (err.error || 'unknown'));
+            console.log('Error: ' + (err.error || 'unknown'));
         }
     } catch (e) {
         console.error(e);
@@ -220,7 +496,7 @@ async function toggleDetector() {
         const res = await fetch(endpoint, { method: 'POST' });
         if (!res.ok) {
             const err = await res.json();
-            alert('Error: ' + (err.error || 'failed'));
+            console.log('Error: ' + (err.error || 'failed'));
             return;
         }
         const payload = await res.json();
@@ -260,3 +536,6 @@ if (detectorToggleBtn) detectorToggleBtn.addEventListener('click', toggleDetecto
 
 // Consultar estado inicial del detector
 fetchDetectorStatus();
+
+// Renderizar la tabla de posiciones al cargar
+renderLeaderboard();
