@@ -76,16 +76,25 @@ class RaceSystem:
         self.at_detector = Detector(
             families='tag16h5',
             nthreads=4,
-            quad_decimate=1,
-            quad_sigma=0.0,
+            # Ajustes por defecto más permisivos para detección en movimiento.
+            # "quad_decimate" más bajo procesa a mayor resolución (más lento,
+            # pero detecta tags pequeños y en movimiento mejor).
+            quad_decimate=0.7,
+            # Algo de blur previo puede ayudar en condiciones con ruido/motion-blur
+            quad_sigma=0.8,
             refine_edges=1,
-            decode_sharpening=0.25,
+            # Aumentar ligeramente el sharpening para ayudar al decodificado
+            decode_sharpening=0.5,
             debug=0
         )
 
         self.running = False
         self.lock = Lock()
         self.frame_out = None
+        # FPS tracking (EMA)
+        self._last_frame_time = None
+        self.fps_ema = None
+        self._fps_alpha = 0.2
         # Cuando `enabled` es False se evita llamar al callback de vueltas
         self.enabled = True
         # Hilo que procesa frames
@@ -110,10 +119,12 @@ class RaceSystem:
         # Contadores y umbrales para reducir falsos positivos
         self.detection_counts = {}  # {tag_id: consecutive_frames_seen}
         self.min_detection_frames = 1  # cuántos frames consecutivos requiere confirmar
-        self.min_tag_area = 300  # área mínima en píxels para considerar un tag real
+        # Reducir area mínima para que tags levemente borrosos/más pequeños sigan detectándose
+        self.min_tag_area = 150  # área mínima en píxels para considerar un tag real
         # Umbral de decision_margin: la escala depende del detector; valores pequeños (ej 0-5)
         # parecen comunes en tu cámara; usar un umbral modesto para filtrar lo más débil.
-        self.min_decision_margin = 2.0  # umbral mínimo de decision_margin del detector
+        # Permitir decision_margin más bajo para no filtrar detecciones en movimiento
+        self.min_decision_margin = 1.0  # umbral mínimo de decision_margin del detector
         self.max_hamming = 1  # máximo hamming aceptable
         # Parámetros para detectar pases rápidos (fallback)
         # Si un tag aparece solo en 1 frame pero existe una posición confirmada
@@ -127,6 +138,14 @@ class RaceSystem:
         # Debug categories a nivel de instancia (complementan las globales)
         # Si no está vacío, su presencia habilita logs de la categoría además de las globales
         self.debug_categories = set()
+        # CLAHE para mejorar contraste adaptativo antes de detección (útil en movimiento)
+        try:
+            # clipLimit y tileGridSize son conservadores para no introducir artefactos
+            self._clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        except Exception:
+            self._clahe = None
+        # Valor devuelto por el último autotune (informativo)
+        self._last_autotune = None
 
     def set_debug_categories(self, categories):
         """Establecer categorías de debug para esta instancia (lista o comma string).
@@ -267,6 +286,14 @@ class RaceSystem:
 
             # Conversión a gris para detección
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # Aplicar CLAHE (si está disponible) para mejorar contraste y ayudar
+            # a detectar tags en movimiento/condiciones de bajo contraste.
+            if getattr(self, '_clahe', None) is not None:
+                try:
+                    gray = self._clahe.apply(gray)
+                except Exception:
+                    # Si CLAHE falla, continuar con la imagen en gris
+                    pass
             
             # Detección de tags
             tags = self.at_detector.detect(gray)
@@ -450,9 +477,30 @@ class RaceSystem:
                 pass
 
             # Comprimir frame para streaming MJPEG
+            # Dibujar contador de FPS en la esquina superior izquierda
+            try:
+                if self.fps_ema is not None:
+                    cv2.putText(frame, f"FPS:{self.fps_ema:.1f}", (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            except Exception:
+                pass
+
             with self.lock:
                 _, buffer = cv2.imencode('.jpg', frame)
                 self.frame_out = buffer.tobytes()
+            # Actualizar FPS EMA (después de procesar/encoder)
+            try:
+                if self._last_frame_time is None:
+                    self._last_frame_time = current_time
+                else:
+                    dt = max(1e-6, current_time - self._last_frame_time)
+                    inst_fps = 1.0 / dt
+                    if self.fps_ema is None:
+                        self.fps_ema = inst_fps
+                    else:
+                        self.fps_ema = (1.0 - self._fps_alpha) * self.fps_ema + self._fps_alpha * inst_fps
+                    self._last_frame_time = current_time
+            except Exception:
+                pass
             # Pequeña pausa para no saturar la CPU
             time.sleep(0.005)
 
@@ -509,6 +557,205 @@ class RaceSystem:
             logger.info(f"allowed_tags actualizado: {self.allowed_tags}")
         except Exception as e:
             logger.exception(f"Error estableciendo allowed_tags: {e}")
+
+    def get_detector_config(self):
+        """Devolver la configuración relevante del detector para mostrar/editar en UI."""
+        try:
+            return {
+                'quad_decimate': getattr(self.at_detector, 'quad_decimate', None) if hasattr(self.at_detector, 'quad_decimate') else None,
+                'quad_sigma': getattr(self.at_detector, 'quad_sigma', None) if hasattr(self.at_detector, 'quad_sigma') else None,
+                'decode_sharpening': getattr(self.at_detector, 'decode_sharpening', None) if hasattr(self.at_detector, 'decode_sharpening') else None,
+                'min_tag_area': self.min_tag_area,
+                'min_decision_margin': self.min_decision_margin,
+                'min_detection_frames': self.min_detection_frames,
+                'allow_quick_pass': bool(self.allow_quick_pass),
+                'quick_pass_time': float(self.quick_pass_time)
+            }
+        except Exception as e:
+            logger.exception(f"Error obteniendo detector config: {e}")
+            return {}
+
+    def update_detector_config(self, cfg: dict):
+        """Aplicar configuración al detector en caliente.
+
+        cfg puede contener: quad_decimate, quad_sigma, decode_sharpening,
+        min_tag_area, min_decision_margin, min_detection_frames,
+        allow_quick_pass, quick_pass_time
+        """
+        try:
+            # Normalizar y aplicar umbrales locales
+            changed_detector = False
+            qd = cfg.get('quad_decimate')
+            qs = cfg.get('quad_sigma')
+            ds = cfg.get('decode_sharpening')
+
+            # Intentar parsear numéricos si vienen como strings
+            def _f(v):
+                try:
+                    return float(v) if v is not None else None
+                except Exception:
+                    return None
+
+            def _i(v):
+                try:
+                    return int(v) if v is not None else None
+                except Exception:
+                    return None
+
+            qd_v = _f(qd)
+            qs_v = _f(qs)
+            ds_v = _f(ds)
+
+            # Revisar si hay que recrear el detector (parámetros de construcción cambiaron)
+            if qd_v is not None and qd_v != getattr(self.at_detector, 'quad_decimate', None):
+                changed_detector = True
+            if qs_v is not None and qs_v != getattr(self.at_detector, 'quad_sigma', None):
+                changed_detector = True
+            if ds_v is not None and ds_v != getattr(self.at_detector, 'decode_sharpening', None):
+                changed_detector = True
+
+            # Aplicar ajustes no relacionados con la instancia del detector
+            mta = _i(cfg.get('min_tag_area'))
+            if mta is not None:
+                self.min_tag_area = mta
+            mdm = _f(cfg.get('min_decision_margin'))
+            if mdm is not None:
+                self.min_decision_margin = mdm
+            mdf = _i(cfg.get('min_detection_frames'))
+            if mdf is not None:
+                self.min_detection_frames = max(1, mdf)
+            aqp = cfg.get('allow_quick_pass')
+            if aqp is not None:
+                # aceptar bool o 'true'/'false' strings
+                if isinstance(aqp, str):
+                    self.allow_quick_pass = aqp.lower() in ('1', 'true', 'yes', 'on')
+                else:
+                    self.allow_quick_pass = bool(aqp)
+            qpt = _f(cfg.get('quick_pass_time'))
+            if qpt is not None:
+                self.quick_pass_time = float(qpt)
+
+            # Si hay cambios que requieren recrear el Detector, hacerlo ahora
+            if changed_detector:
+                # Construir parámetros basados en actuales y valores nuevos
+                new_qd = qd_v if qd_v is not None else getattr(self.at_detector, 'quad_decimate', 1)
+                new_qs = qs_v if qs_v is not None else getattr(self.at_detector, 'quad_sigma', 0.0)
+                new_ds = ds_v if ds_v is not None else getattr(self.at_detector, 'decode_sharpening', 0.25)
+
+                try:
+                    new_detector = Detector(
+                        families='tag16h5',
+                        nthreads=4,
+                        quad_decimate=new_qd,
+                        quad_sigma=new_qs,
+                        refine_edges=1,
+                        decode_sharpening=new_ds,
+                        debug=0
+                    )
+                    # Asignar de forma atómica; detect() en curso puede terminar sin problemas
+                    self.at_detector = new_detector
+                    logger.info(f"Detector recreado con quad_decimate={new_qd} quad_sigma={new_qs} decode_sharpening={new_ds}")
+                except Exception as e:
+                    logger.exception(f"Error recreando detector con nuevos parámetros: {e}")
+
+            return self.get_detector_config()
+        except Exception as e:
+            logger.exception(f"Error aplicando detector config: {e}")
+            return {}
+
+    def auto_tune_camera(self, mode='focus'):
+        """Intento simple de autotune para nitidez.
+
+        mode 'focus': si la cámara soporta `CAP_PROP_FOCUS`, barrido rápido
+        y búsqueda por máxima varianza de Laplaciano para estimar el enfoque óptimo.
+        Si no hay soporte, se intenta activar AutoFocus brevemente.
+
+        Devuelve dict con el resultado y el valor de foco aplicado (si procede).
+        """
+        result = {'ok': False, 'reason': None, 'focus': None}
+        try:
+            if not (self.cap and getattr(self.cap, 'isOpened', lambda: False)()):
+                result['reason'] = 'camera_not_open'
+                return result
+
+            # Intentar usar enfoque manual si está soportado
+            # Rango asumido 0-255; haremos un barrido grosero y luego refinado.
+            try:
+                # Probar si set/get focus funciona
+                got = self.cap.get(cv2.CAP_PROP_FOCUS)
+                # Algunos drivers devuelven -1 si no soportado
+                if got is None:
+                    got = -1
+            except Exception:
+                got = -1
+
+            if got >= 0:
+                # Barrido grosero
+                best_focus = int(got)
+                best_score = -1.0
+                # coarse sweep
+                coarse = list(range(0, 256, 25))
+                for v in coarse:
+                    try:
+                        self.cap.set(cv2.CAP_PROP_FOCUS, float(v))
+                        # leer algunos frames para estabilizar
+                        time.sleep(0.06)
+                        ret, f = self.cap.read()
+                        if not ret:
+                            continue
+                        gray = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
+                        score = cv2.Laplacian(gray, cv2.CV_64F).var()
+                        if score > best_score:
+                            best_score = score
+                            best_focus = v
+                    except Exception:
+                        continue
+
+                # refine around best
+                start = max(0, best_focus - 25)
+                end = min(255, best_focus + 25)
+                for v in range(start, end + 1, 5):
+                    try:
+                        self.cap.set(cv2.CAP_PROP_FOCUS, float(v))
+                        time.sleep(0.04)
+                        ret, f = self.cap.read()
+                        if not ret:
+                            continue
+                        gray = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
+                        score = cv2.Laplacian(gray, cv2.CV_64F).var()
+                        if score > best_score:
+                            best_score = score
+                            best_focus = v
+                    except Exception:
+                        continue
+
+                # Aplicar mejor foco encontrado
+                try:
+                    self.cap.set(cv2.CAP_PROP_FOCUS, float(best_focus))
+                except Exception:
+                    pass
+                result.update({'ok': True, 'reason': 'focus_applied', 'focus': int(best_focus), 'score': float(best_score)})
+                self._last_autotune = result
+                logger.info(f"Autotune focus applied: {result}")
+                return result
+            else:
+                # fallback: intentar activar autofocus brevemente
+                try:
+                    self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 1)
+                    time.sleep(1.0)
+                    self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+                    result.update({'ok': True, 'reason': 'autofocus_toggled'})
+                    self._last_autotune = result
+                    return result
+                except Exception as e:
+                    result['reason'] = 'autofocus_failed'
+                    result['error'] = str(e)
+                    return result
+        except Exception as e:
+            logger.exception(f"Error en auto_tune_camera: {e}")
+            result['reason'] = 'exception'
+            result['error'] = str(e)
+            return result
 
     def get_frame(self):
         with self.lock:

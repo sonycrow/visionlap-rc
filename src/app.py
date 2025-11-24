@@ -248,6 +248,35 @@ def api_set_camera_config():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/detector-config', methods=['GET'])
+def api_get_detector_config():
+    try:
+        cfg = vision_system.get_detector_config() or {}
+        return jsonify(cfg)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/detector-config', methods=['POST'])
+def api_set_detector_config():
+    try:
+        data = request.get_json(force=True) or {}
+        updated = vision_system.update_detector_config(data)
+        return jsonify({'ok': True, 'detector_config': updated})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/camera-autotune', methods=['POST'])
+def api_camera_autotune():
+    try:
+        # Ejecutar autotune (bloqueante, pero rápido)
+        result = vision_system.auto_tune_camera()
+        return jsonify({'ok': True, 'result': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/session/start', methods=['POST'])
 def start_session():
     # Cerrar sesiones anteriores

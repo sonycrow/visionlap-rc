@@ -49,6 +49,8 @@
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     </button>
                     <button id="cameraConfigBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white p-2 rounded text-sm">Config Cámara</button>
+                    <button id="detectorConfigBtn" class="bg-pink-600 hover:bg-pink-700 text-white p-2 rounded text-sm ml-2">Tuning Detector</button>
+                    <button id="autoTuneBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded text-sm ml-2">Auto Tune Nitidez</button>
                 </div>
             </div>
             <!-- Panel Pilotos -->
@@ -248,6 +250,57 @@
         </div>
     </div>
 
+    <!-- Detector Config Modal -->
+    <div id="detectorConfigModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-gray-800 rounded-lg p-6 w-full max-w-lg shadow-xl">
+            <h3 class="text-white text-xl mb-4">Tuning Detector (en caliente)</h3>
+            <form id="detectorConfigForm">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-300">quad_decimate</label>
+                        <input id="quad_decimate" type="number" step="0.1" min="0.1" max="4" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300">quad_sigma</label>
+                        <input id="quad_sigma" type="number" step="0.1" min="0" max="5" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300">decode_sharpening</label>
+                        <input id="decode_sharpening" type="number" step="0.1" min="0" max="2" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300">min_tag_area</label>
+                        <input id="min_tag_area" type="number" step="1" min="10" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300">min_decision_margin</label>
+                        <input id="min_decision_margin" type="number" step="0.1" min="0" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300">min_detection_frames</label>
+                        <input id="min_detection_frames" type="number" step="1" min="1" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300">allow_quick_pass</label>
+                        <select id="allow_quick_pass" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100">
+                            <option value="">No cambiar</option>
+                            <option value="true">Sí</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300">quick_pass_time (s)</label>
+                        <input id="quick_pass_time" type="number" step="0.05" min="0.05" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" />
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end gap-4">
+                    <button type="button" id="cancelDetectorConfig" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded">Aplicar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const cameraBtn = document.getElementById('cameraConfigBtn');
         const cameraModal = document.getElementById('cameraConfigModal');
@@ -329,6 +382,95 @@
                 alert('Configuración guardada. El detector se reconfigurará automáticamente si estaba activo.');
             } else {
                 alert('Error guardando configuración: ' + (data.error || resp.statusText));
+            }
+        });
+
+        // Detector tuning UI
+        const detectorBtn = document.getElementById('detectorConfigBtn');
+        const detectorModal = document.getElementById('detectorConfigModal');
+        const cancelDetector = document.getElementById('cancelDetectorConfig');
+        const detectorForm = document.getElementById('detectorConfigForm');
+
+        async function fetchDetectorConfig() {
+            const res = await fetch('/api/detector-config');
+            if (!res.ok) return null;
+            return await res.json();
+        }
+
+        detectorBtn?.addEventListener('click', async () => {
+            const cfg = await fetchDetectorConfig();
+            if (!cfg) return alert('No se pudo obtener configuración del detector');
+            // Rellenar campos (si existen)
+            if (cfg.quad_decimate !== undefined && cfg.quad_decimate !== null) document.getElementById('quad_decimate').value = cfg.quad_decimate;
+            if (cfg.quad_sigma !== undefined && cfg.quad_sigma !== null) document.getElementById('quad_sigma').value = cfg.quad_sigma;
+            if (cfg.decode_sharpening !== undefined && cfg.decode_sharpening !== null) document.getElementById('decode_sharpening').value = cfg.decode_sharpening;
+            if (cfg.min_tag_area !== undefined && cfg.min_tag_area !== null) document.getElementById('min_tag_area').value = cfg.min_tag_area;
+            if (cfg.min_decision_margin !== undefined && cfg.min_decision_margin !== null) document.getElementById('min_decision_margin').value = cfg.min_decision_margin;
+            if (cfg.min_detection_frames !== undefined && cfg.min_detection_frames !== null) document.getElementById('min_detection_frames').value = cfg.min_detection_frames;
+            if (cfg.allow_quick_pass !== undefined && cfg.allow_quick_pass !== null) document.getElementById('allow_quick_pass').value = cfg.allow_quick_pass ? 'true' : 'false';
+            if (cfg.quick_pass_time !== undefined && cfg.quick_pass_time !== null) document.getElementById('quick_pass_time').value = cfg.quick_pass_time;
+            detectorModal.classList.remove('hidden');
+        });
+
+        cancelDetector?.addEventListener('click', () => detectorModal.classList.add('hidden'));
+
+        detectorForm?.addEventListener('submit', async (ev) => {
+            ev.preventDefault();
+            const payload = {};
+            const qd = document.getElementById('quad_decimate').value;
+            if (qd !== '') payload.quad_decimate = parseFloat(qd);
+            const qs = document.getElementById('quad_sigma').value;
+            if (qs !== '') payload.quad_sigma = parseFloat(qs);
+            const ds = document.getElementById('decode_sharpening').value;
+            if (ds !== '') payload.decode_sharpening = parseFloat(ds);
+            const mta = document.getElementById('min_tag_area').value;
+            if (mta !== '') payload.min_tag_area = parseInt(mta);
+            const mdm = document.getElementById('min_decision_margin').value;
+            if (mdm !== '') payload.min_decision_margin = parseFloat(mdm);
+            const mdf = document.getElementById('min_detection_frames').value;
+            if (mdf !== '') payload.min_detection_frames = parseInt(mdf);
+            const aqp = document.getElementById('allow_quick_pass').value;
+            if (aqp !== '') payload.allow_quick_pass = (aqp === 'true');
+            const qpt = document.getElementById('quick_pass_time').value;
+            if (qpt !== '') payload.quick_pass_time = parseFloat(qpt);
+
+            const resp = await fetch('/api/detector-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                detectorModal.classList.add('hidden');
+                alert('Parámetros del detector aplicados.');
+            } else {
+                alert('Error aplicando parámetros: ' + (data.error || resp.statusText));
+            }
+        });
+
+        // Auto Tune Nitidez
+        const autoTuneBtn = document.getElementById('autoTuneBtn');
+        autoTuneBtn?.addEventListener('click', async () => {
+            if (!confirm('Iniciar Auto Tune de nitidez. Esto recorrerá algunos valores de enfoque y puede tardar ~3s.')) return;
+            try {
+                autoTuneBtn.disabled = true;
+                autoTuneBtn.textContent = 'Autotune...';
+                const resp = await fetch('/api/camera-autotune', { method: 'POST' });
+                const data = await resp.json();
+                if (resp.ok && data.ok) {
+                    alert('Autotune completo: ' + JSON.stringify(data.result));
+                    // Si se encontró foco, actualizar control de foco en modal
+                    if (data.result && data.result.focus !== undefined) {
+                        try { document.getElementById('CAMERA_FOCUS').value = data.result.focus; } catch(e){}
+                    }
+                } else {
+                    alert('Autotune falló: ' + (data.error || JSON.stringify(data)));
+                }
+            } catch (e) {
+                alert('Error ejecutando autotune: ' + e);
+            } finally {
+                autoTuneBtn.disabled = false;
+                autoTuneBtn.textContent = 'Auto Tune Nitidez';
             }
         });
     </script>
