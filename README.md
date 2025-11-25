@@ -78,6 +78,18 @@ La aplicación emite eventos en tiempo real vía WebSockets (Socket.IO): `lap_up
 - `src/models.py` define los modelos SQLAlchemy.
 - `src/app.py` expone rutas y configura Socket.IO.
 
+### Frontend / JavaScript
+
+Los scripts del frontend están modularizados bajo `src/static/js/` — cada responsabilidad vive en su propio fichero, por ejemplo:
+- `settings-modal.js` — manejo del modal de opciones y parámetros globales (prepTime, maxTime, maxLaps)
+ - `camera-config.js` — manejo del modal de configuración de cámara y autotune
+ - `detector-config.js` — manejo del modal de tuning del detector
+- `race-control.js` — lógica de control de la sesión / secuencia de semáforo y cronometraje
+- `driver-manager.js` — gestión CRUD de pilotos
+- `detector-control.js`, `modal-handlers.js`, `leaderboard.js` — otros módulos UI
+
+La plantilla principal (`src/templates/layout.html`) carga estos scripts en el orden necesario antes del archivo `main.js` que actúa como entrypoint.
+
 Para cambiar parámetros de la cámara o la línea de meta edita `config.py` o exporta variables de entorno antes de ejecutar.
 
 ## Pruebas y migraciones

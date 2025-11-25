@@ -1,6 +1,7 @@
 let raceStatusBlock;
 let semaphoreOverlay, semaphoreLights, semaphoreTimer;
 let gridCountdownInterval, semaphoreCountdownInterval, raceTimerInterval;
+let currentRaceState; // administrado internamente aquí, expuesto en window
 
 const RACE_STATE = {
     IDLE: 'idle',
@@ -20,8 +21,10 @@ function initializeRaceControls() {
     window.startSession = startSession;
     window.stopSession = stopSession;
 
-    // Estado inicial
+    // Estado inicial (propio del módulo)
     currentRaceState = RACE_STATE.IDLE;
+    window.currentRaceState = currentRaceState;
+    updateRaceLocalState();
 }
 
 function updateRaceStatus(message) {
@@ -37,6 +40,8 @@ function stopSession() {
     semaphoreOverlay.classList.remove('flex');
     
     currentRaceState = RACE_STATE.IDLE;
+    window.currentRaceState = currentRaceState;
+    updateRaceLocalState();
     driversData = {}; // Reinicia los datos del leaderboard
     renderLeaderboard();
     updateRaceStatus('<p class="text-gray-300">Carrera detenida. Haz clic en "Iniciar" para empezar de nuevo.</p>');
@@ -50,8 +55,10 @@ async function startSession() {
     
     console.log("Iniciando secuencia de carrera...");
     currentRaceState = RACE_STATE.PREPARING;
+    window.currentRaceState = currentRaceState;
+    updateRaceLocalState();
     
-    let gridTime = prepTime;
+    let gridTime = (window.prepTime ?? 60);
     updateRaceStatus(`<h4 class="text-xl font-bold text-yellow-400 mb-2">¡Prepara la parrilla!</h4><p class="text-gray-200">Tiempo: <span class="font-mono text-2xl">${gridTime}</span>s</p>`);
     
     gridCountdownInterval = setInterval(() => {
@@ -66,6 +73,8 @@ async function startSession() {
 
 function startSemaphoreCountdown() {
     currentRaceState = RACE_STATE.STARTING;
+    window.currentRaceState = currentRaceState;
+    updateRaceLocalState();
     semaphoreOverlay.classList.remove('hidden');
     semaphoreOverlay.classList.add('flex');
     let semaphoreTime = 10;
@@ -103,14 +112,16 @@ function startSemaphoreCountdown() {
 async function startRace() {
     await fetch('/api/session/start', {method: 'POST'});
     currentRaceState = RACE_STATE.RUNNING;
+    window.currentRaceState = currentRaceState;
+    updateRaceLocalState();
     
-    let raceTime = maxTime * 60;
+    let raceTime = (window.maxTime ?? 5) * 60;
     const formatTime = (s) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 
     updateRaceStatus(`
         <div class="flex justify-around items-center">
             <div><h5 class="text-sm uppercase text-gray-400">Tiempo</h5><p class="font-mono text-3xl text-green-400">${formatTime(raceTime)}</p></div>
-            <div><h5 class="text-sm uppercase text-gray-400">Vueltas Máx.</h5><p class="font-mono text-3xl">${maxLaps}</p></div>
+            <div><h5 class="text-sm uppercase text-gray-400">Vueltas Máx.</h5><p class="font-mono text-3xl">${(window.maxLaps ?? 10)}</p></div>
         </div>`);
 
     raceTimerInterval = setInterval(() => {
@@ -121,8 +132,16 @@ async function startRace() {
         if (raceTime <= 0) {
             clearInterval(raceTimerInterval);
             currentRaceState = RACE_STATE.FINISHED;
+            window.currentRaceState = currentRaceState;
+            updateRaceLocalState();
             updateRaceStatus('<h4 class="text-xl font-bold text-red-500">¡CARRERA FINALIZADA!</h4>');
             stopSession();
         }
     }, 1000);
+}
+
+function updateRaceLocalState() {
+    const el = document.getElementById('raceLocalState');
+    if (!el) return;
+    el.textContent = currentRaceState;
 }
