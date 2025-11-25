@@ -1,0 +1,81 @@
+<!-- Camera Config Modal -->
+<div id="cameraConfigModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-gray-800 rounded-lg p-6 w-full max-w-lg shadow-xl">
+        <h3 class="text-white text-xl mb-4">Configuración de Cámara</h3>
+        <form id="cameraConfigForm">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm text-gray-300">Device (índice)</label>
+                    <input id="CAMERA_IDX" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" type="number" min="0">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300">FPS</label>
+                    <input id="CAMERA_FPS" type="number" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" min="1">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300">Width</label>
+                    <input id="CAMERA_WIDTH" type="number" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" min="1">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300">Height</label>
+                    <input id="CAMERA_HEIGHT" type="number" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100" min="1">
+                </div>
+
+                <div class="col-span-2">
+                    <label class="block text-sm text-gray-300">Auto Focus</label>
+                    <select id="CAMERA_AUTOFOCUS" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100">
+                        <option value="">No cambiar</option>
+                        <option value="1">Activar (Auto)</option>
+                        <option value="0">Desactivar (Manual)</option>
+                    </select>
+                    <p class="text-xs text-gray-400 mt-1">Controla el autoenfoque del driver (si está soportado).</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm text-gray-300">Focus (manual)</label>
+                    <input id="CAMERA_FOCUS" type="range" min="0" max="255" class="w-full mt-1" />
+                    <div class="text-xs text-gray-400">Rango típico 0–255. Usar solo si Auto Focus está desactivado.</div>
+                </div>
+
+                <div>
+                    <label class="block text-sm text-gray-300">Auto Exposición</label>
+                    <select id="CAMERA_AUTO_EXPOSURE" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100">
+                        <option value="">No cambiar</option>
+                        <option value="3">Automático (driver=3)</option>
+                        <option value="1">Manual (driver=1)</option>
+                    </select>
+                    <p class="text-xs text-gray-400 mt-1">Nota: algunos drivers usan 1=manual y 3=auto (Windows/OpenCV).</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm text-gray-300">Exposición (manual)</label>
+                    <input id="CAMERA_EXPOSURE" type="range" min="-13" max="-1" class="w-full mt-1" />
+                    <div class="text-xs text-gray-400">Valores típicos negativos en algunos drivers. Usar junto a Auto Exposición=Manual.</div>
+                </div>
+
+                <div>
+                    <label class="block text-sm text-gray-300">Ganancia (Gain)</label>
+                    <input id="CAMERA_GAIN" type="range" min="0" max="255" class="w-full mt-1" />
+                </div>
+
+                <div>
+                    <label class="block text-sm text-gray-300">Brillo</label>
+                    <input id="CAMERA_BRIGHTNESS" type="range" min="0" max="255" class="w-full mt-1" />
+                </div>
+
+                <div>
+                    <label class="block text-sm text-gray-300">Contraste</label>
+                    <input id="CAMERA_CONTRAST" type="range" min="0" max="255" class="w-full mt-1" />
+                </div>
+
+                <div class="col-span-2 text-xs text-gray-400">
+                    <p>Consejo: Si no estás seguro, usa primero "No cambiar" y prueba valores pequeños. Algunos parámetros dependen del driver/cámara y pueden ser ignorados.</p>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-4">
+                <button type="button" id="cancelCameraConfig" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>

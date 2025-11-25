@@ -1,0 +1,21 @@
+<!-- Panel Pilotos -->
+<div class="bg-gray-800 rounded-lg p-3 shadow-lg flex-grow flex flex-col">
+     <div class="flex justify-between items-center mb-2">
+         <h5 class="text-gray-100 font-medium">Pilotos registrados</h5>
+         <button id="addDriverBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">Registrar</button>
+     </div>
+    <div class="flex items-center gap-2 mb-2">
+        <input id="driversSearch" type="text" placeholder="Buscar..." class="flex-1 px-3 py-1 rounded bg-gray-700 text-gray-100 text-sm">
+        <button id="driversReload" class="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-white text-sm">Buscar</button>
+    </div>
+    <ul id="driversList" class="space-y-2 text-gray-200 text-sm flex-grow overflow-y-auto pr-1">
+        <!-- JS Inserted -->
+    </ul>
+    <div class="mt-2 flex items-center justify-between text-xs text-gray-400">
+        <div id="driversPagerInfo"></div>
+        <div class="space-x-1">
+            <button id="driversPrev" class="px-2 py-1 bg-gray-700 rounded">◀</button>
+            <button id="driversNext" class="px-2 py-1 bg-gray-700 rounded">▶</button>
+        </div>
+    </div>
+</div>

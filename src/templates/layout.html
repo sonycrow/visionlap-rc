@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>VisionLap RC Dashboard</title>
+     <!-- Tailwind CDN para desarrollo -->
+     <script src="https://cdn.tailwindcss.com"></script>
+     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+     <style>
+         .lap-time-display { font-family: 'Courier New', monospace; font-weight: bold; font-size: 1.25rem; color: #f59e0b; }
+         /* Pequeñas reglas para el feed de vídeo (tailwind no gestiona contenido inline) */
+         .video-feed { width: 100%; height: auto; display: block; }
+         .semaphore-light { transition: background-color 0.2s; }
+         .semaphore-light.red { background-color: #ef4444; }
+         .semaphore-light.off { background-color: #374151; } /* gray-700 */
+         .semaphore-light.green { background-color: #22c55e; }
+     </style>
+</head>
+
+<body class="bg-gray-900 text-white h-screen flex flex-col overflow-hidden">
+
+    {% include "_header.html" %}
+
+    <main class="flex-grow flex p-4 gap-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% include "_semaphore.html" %}
+    {% include "_settings_modal.html" %}
+    {% include "_add_driver_modal.html" %}
+    {% include "_camera_config_modal.html" %}
+    {% include "_detector_config_modal.html" %}
+
+    <!-- Scripts modularizados -->
+    <script src="{{ url_for('static', filename='js/modal-handlers.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

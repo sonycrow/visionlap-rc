@@ -1,0 +1,27 @@
+<!-- Add Driver Modal -->
+<div id="addDriverModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-xl">
+        <h3 id="driverModalTitle" class="text-white text-xl mb-4">Registrar Nuevo Piloto</h3>
+        <form id="driverForm">
+            <input type="hidden" id="dId" name="dId">
+            <div class="space-y-4">
+                <div>
+                    <label for="dName" class="block text-sm font-medium text-gray-300">Nombre</label>
+                    <input type="text" id="dName" placeholder="Nombre completo del piloto" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="dNick" class="block text-sm font-medium text-gray-300">Nickname (3 letras)</label>
+                    <input type="text" id="dNick" placeholder="AAA" maxlength="3" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="dTag" class="block text-sm font-medium text-gray-300">Tag ID (0-29)</label>
+                    <input type="number" id="dTag" placeholder="ID del tag de AprilTag" class="w-full mt-1 px-3 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-4">
+                <button type="button" id="cancelDriver" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Registrar Piloto</button>
+            </div>
+        </form>
+    </div>
+</div>
