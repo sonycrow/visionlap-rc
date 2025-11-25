@@ -78,6 +78,55 @@ La aplicación emite eventos en tiempo real vía WebSockets (Socket.IO): `lap_up
 - `src/models.py` define los modelos SQLAlchemy.
 - `src/app.py` expone rutas y configura Socket.IO.
 
+### Panel central de pilotos
+
+Se ha añadido una página de gestión centralizada para pilotos en `/drivers` con:
+- Listado y búsqueda de pilotos.
+- Formulario inline para crear pilotos y uso del modal existente para edición.
+- Estadísticas por piloto (vueltas registradas, carreras inscritas, podios, campeonatos donde participó) mediante `/api/drivers/<id>/stats`.
+
+### Historial detallado por piloto
+
+La nueva vista de detalle de piloto (`/drivers/<id>`) muestra:
+- Resumen con mejores tiempos, número de carreras iniciadas, podios y campeonatos donde participó.
+- Pestañas con tablas: historial de vueltas (`/api/drivers/<id>/laps`) y participaciones en carreras (`/api/drivers/<id>/participations`).
+
+Estas APIs devuelven información cruzada con `RaceEvent` y `Season` cuando esté disponible, por ejemplo para identificar en qué temporada y campeonato se consiguió una vuelta o participación.
+
+Esto facilita compartir pilotos entre temporadas / carreras desde un único sitio.
+
+## Sistema de Campeonatos (nueva funcionalidad)
+
+He añadido soporte básico de campeonatos/temporadas/carreras y sesiones (práctica/qualy/carrera):
+
+- Modelos nuevos: `Championship`, `Season`, `RaceEvent`, `SeasonRegistration`, `RaceRegistration` (en `src/models.py`).
+- Rutas y API básicas en `src/app.py`:
+	- Páginas: `/championships`, `/championships/<id>`, `/seasons/<id>`, `/races/<id>` — páginas para gestionar campeonatos, temporadas, carreras y sesiones.
+	- Endpoints API para CRUD: `/api/championships`, `/api/seasons`, `/api/races`, `/api/seasons/<id>/register`, `/api/races/<id>/register`, `/api/races/<id>/sessions`.
+
+### Flujo esperado
+
+1. Crear un `Championship` (p. ej. "Mini 1/28 Series").
+2. Crear `Season` dentro del campeonato (p. ej. `2025`).
+3. Dentro de la temporada, definir `RaceEvent` (cada GP / round) con orden y fecha.
+4. Para cada `RaceEvent`, crear `Session` (practice, qualy, race). Estas sesiones pueden iniciarse con el detector (POST `/api/session/start` admite ahora payload `{type, race_id}`).
+5. Inscribir pilotos a la temporada (`/api/seasons/<id>/register`) y/o a carreras individuales (`/api/races/<id>/register`).
+
+### Notas operativas
+- He añadido la relación `Session.race_id` para enlazar sesiones a `RaceEvent`. Si ya tienes una base de datos, crea una migración con Flask-Migrate antes de ejecutar.
+
+### Migraciones
+
+Si usas Flask-Migrate ejecuta (desde PowerShell en la raíz del repo):
+
+```powershell
+setx FLASK_APP run.py
+flask db migrate -m "Add championships/season/race models"
+flask db upgrade
+```
+
+Si tu base de datos local tiene datos críticos, haz backup antes de aplicar migraciones.
+
 ### Frontend / JavaScript
 
 Los scripts del frontend están modularizados bajo `src/static/js/` — cada responsabilidad vive en su propio fichero, por ejemplo:

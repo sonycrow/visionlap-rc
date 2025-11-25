@@ -1,0 +1,136 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="p-4 w-full">
+    <h2 class="text-2xl font-bold mb-4">Gestión de Pilotos</h2>
+
+    <div class="grid grid-cols-3 gap-4 mb-4">
+        <div class="col-span-2">
+            <div class="flex gap-2 items-center mb-2">
+                <input id="driversSearch" placeholder="Buscar piloto por nombre o nickname" class="px-3 py-2 rounded bg-gray-700 text-white w-full" />
+                <button id="driversReload" class="px-3 py-2 bg-indigo-600 rounded text-white">Buscar</button>
+            </div>
+
+            <div id="driversList" class="space-y-2">
+                {% for d in drivers %}
+                    <div class="p-3 bg-gray-800 rounded flex justify-between items-center" data-driver-id="{{ d.id }}">
+                        <div>
+                            <div class="font-medium"><a href="/drivers/{{ d.id }}" class="hover:underline">{{ d.name }}</a> <span class="text-sm text-gray-400">({{ d.nickname }})</span></div>
+                            <div class="text-xs text-gray-400">Tag: {{ d.tag_id }}</div>
+                        </div>
+                        <div class="flex gap-2 items-center">
+                            <button class="view-stats-btn px-2 py-1 bg-blue-600 rounded text-xs" data-id="{{ d.id }}">Ver stats</button>
+                            <button class="edit-btn px-2 py-1 bg-yellow-500 rounded text-xs" data-id="{{ d.id }}">Editar</button>
+                            <button class="delete-btn px-2 py-1 bg-red-600 rounded text-xs" data-id="{{ d.id }}">Borrar</button>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="text-gray-400">No hay pilotos.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="col-span-1">
+            <div class="bg-gray-800 rounded p-3">
+                <h3 class="text-lg font-semibold mb-3">Crear piloto</h3>
+                    <div class="flex gap-2">
+                        <button id="openModalBtn" type="button" class="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white">Abrir modal para crear/editar</button>
+                    </div>
+            </div>
+
+            <div id="driverStats" class="mt-4 bg-gray-800 rounded p-3 hidden">
+                <h4 class="text-md font-semibold">Estadísticas</h4>
+                <div id="statsBody" class="text-sm text-gray-300 mt-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Re-usa el modal existente para edición si existe -->
+    {% include "_add_driver_modal.html" %}
+
+</div>
+
+<script>
+// Inline script para la página de pilotos: reutiliza endpoints existentes
+document.getElementById('driversReload')?.addEventListener('click', () => {
+    const q = document.getElementById('driversSearch').value.trim();
+    fetch('/api/drivers?q=' + encodeURIComponent(q)).then(r => r.json()).then(data => {
+        const list = document.getElementById('driversList');
+        list.innerHTML = (data.items || []).map(d => `
+            <div class="p-3 bg-gray-800 rounded flex justify-between items-center" data-driver-id="${d.id}">
+                <div>
+                    <div class="font-medium">${d.name} <span class="text-sm text-gray-400">(${d.nickname})</span></div>
+                    <div class="text-xs text-gray-400">Tag: ${d.tag_id}</div>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <button class="view-stats-btn px-2 py-1 bg-blue-600 rounded text-xs" data-id="${d.id}">Ver stats</button>
+                    <button class="edit-btn px-2 py-1 bg-yellow-500 rounded text-xs" data-id="${d.id}">Editar</button>
+                    <button class="delete-btn px-2 py-1 bg-red-600 rounded text-xs" data-id="${d.id}">Borrar</button>
+                </div>
+            </div>
+        `).join('');
+    }).catch(e => alert('Error buscando pilotos'));
+});
+
+// abrir modal
+document.getElementById('openModalBtn')?.addEventListener('click', () => {
+    if (typeof openDriverModal === 'function') return openDriverModal();
+});
+
+// abrir modal (usa openDriverModal si está disponible, sino busca el botón)
+document.getElementById('openModalBtn')?.addEventListener('click', () => {
+    if (typeof openDriverModal === 'function') return openDriverModal();
+    const btn = document.getElementById('addDriverBtn');
+    if (btn) btn.click();
+});
+
+// Delegation: ver stats / edit / delete
+document.getElementById('driversList')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const id = btn.getAttribute('data-id');
+    if (btn.classList.contains('view-stats-btn')) {
+        try {
+            const resp = await fetch(`/api/drivers/${id}/stats`);
+            const data = await resp.json();
+            if (!resp.ok) return alert('Error: ' + (data.error || resp.statusText));
+            const body = document.getElementById('statsBody');
+            body.innerHTML = `
+                <div>Vueltas registradas: <strong>${data.laps}</strong></div>
+                <div>Carreras inscritas: <strong>${data.races}</strong></div>
+                <div>Podios: <strong>${data.podiums}</strong></div>
+                <div>Campeonatos: <strong>${data.championships_count}</strong></div>
+                <div class="mt-2">${(data.championships || []).map(c => `<div class='text-xs text-gray-400'>- ${c.name}</div>`).join('')}</div>
+            `;
+            document.getElementById('driverStats').classList.remove('hidden');
+        } catch (e) {
+            alert('Error cargando estadisticas');
+        }
+    }
+    if (btn.classList.contains('delete-btn')) {
+        if (!confirm('Borrar piloto?')) return;
+        const resp = await fetch(`/api/drivers/${id}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (resp.ok) location.reload(); else alert('Error eliminando piloto: ' + (data.error || resp.statusText));
+    }
+    if (btn.classList.contains('edit-btn')) {
+        // usar modal existente: simular click en editar (el modal JS añade listeners para botones y abrir modal)
+        const driverId = parseInt(id);
+        // Recuperar info y llenar modal
+        const res = await fetch('/api/drivers');
+        const payload = await res.json();
+        const found = payload.items.find(it => it.id === driverId);
+        if (!found) return alert('No encontrado');
+        // Rellenar modal fields
+        document.getElementById('dId').value = found.id;
+        document.getElementById('dName').value = found.name;
+        document.getElementById('dNick').value = found.nickname;
+        document.getElementById('dTag').value = found.tag_id;
+        // Abrir modal
+        const addDriverBtn = document.getElementById('addDriverBtn');
+        if (addDriverBtn) addDriverBtn.click();
+    }
+});
+</script>
+
+{% endblock %}

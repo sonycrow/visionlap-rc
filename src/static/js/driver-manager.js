@@ -15,18 +15,20 @@ function initializeDriverManager() {
     const driversPrev = document.getElementById('driversPrev');
     const driversNext = document.getElementById('driversNext');
 
-    addDriverBtn.addEventListener('click', () => openDriverModal());
-    cancelDriverBtn.addEventListener('click', closeDriverModal);
-    driverForm.addEventListener('submit', handleDriverSave);
+    if (addDriverBtn) addDriverBtn.addEventListener('click', () => openDriverModal());
+    if (cancelDriverBtn) cancelDriverBtn.addEventListener('click', closeDriverModal);
+    if (driverForm) driverForm.addEventListener('submit', handleDriverSave);
 
-    driversReload.onclick = () => { driversQuery = driversSearch.value.trim(); fetchDrivers(1, driversQuery); };
-    driversPrev.onclick = () => { if (driversPage > 1) fetchDrivers(driversPage - 1, driversQuery); };
-    driversNext.onclick = () => { if (driversPage < driversTotalPages) fetchDrivers(driversPage + 1, driversQuery); };
+    if (driversReload && driversSearch) driversReload.onclick = () => { driversQuery = driversSearch.value.trim(); fetchDrivers(1, driversQuery); };
+    if (driversPrev) driversPrev.onclick = () => { if (driversPage > 1) fetchDrivers(driversPage - 1, driversQuery); };
+    if (driversNext) driversNext.onclick = () => { if (driversPage < driversTotalPages) fetchDrivers(driversPage + 1, driversQuery); };
 
-    fetchDrivers(); // Carga inicial
+    // Carga inicial de la lista *si* hay un contenedor para mostrar pilotos en esta página
+    if (document.getElementById('driversList')) fetchDrivers();
 }
 
 function openDriverModal(driver = null) {
+    if (!addDriverModal || !driverForm) return console.warn('Driver modal not available on this page');
     const modalTitle = document.getElementById('driverModalTitle');
     const submitButton = driverForm.querySelector('button[type="submit"]');
     driverForm.reset();
@@ -47,6 +49,7 @@ function openDriverModal(driver = null) {
 }
 
 function closeDriverModal() {
+    if (!addDriverModal) return;
     addDriverModal.classList.add('hidden');
 }
 
@@ -106,7 +109,19 @@ async function fetchDrivers(page = 1, q = '') {
 
 function renderDrivers(drivers) {
     const list = document.getElementById('driversList');
-    list.innerHTML = drivers.map(d => `
+    if (!list) return; // nada que hacer si la página no tiene panel de pilotos
+    const readonly = list.dataset.readonly === 'true';
+    list.innerHTML = drivers.map(d => {
+        if (readonly) {
+            return `
+            <li class="px-3 py-2 bg-gray-700 rounded flex justify-between items-center" data-driver-id="${d.id}">
+                <div>
+                    <div class="font-medium"><a href="/drivers/${d.id}" class="hover:underline">${escapeHtml(d.name)}</a> <span class="text-sm text-gray-400">(${escapeHtml(d.nickname)})</span></div>
+                    <div class="text-xs text-gray-400">Tag: ${d.tag_id}</div>
+                </div>
+            </li>`;
+        }
+        return `
         <li class="px-3 py-2 bg-gray-700 rounded flex justify-between items-center" data-driver-id="${d.id}">
             <div>
                 <div class="font-medium">${escapeHtml(d.name)} <span class="text-sm text-gray-400">(${escapeHtml(d.nickname)})</span></div>
@@ -116,17 +131,21 @@ function renderDrivers(drivers) {
                 <button class="edit-btn px-2 py-1 bg-yellow-500 hover:bg-yellow-600 rounded text-xs">Editar</button>
                 <button class="delete-btn px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs">Borrar</button>
             </div>
-        </li>`).join('');
+        </li>`;
+    }).join('');
     
-    // Add event listeners after rendering
-    list.querySelectorAll('.edit-btn').forEach((btn, i) => btn.onclick = () => openDriverModal(drivers[i]));
+    // Add event listeners after rendering. Only attach handlers when elements exist.
+    if (!readonly) list.querySelectorAll('.edit-btn').forEach((btn, i) => { if (typeof openDriverModal === 'function') btn.onclick = () => openDriverModal(drivers[i]); });
     list.querySelectorAll('.delete-btn').forEach((btn, i) => btn.onclick = () => deleteDriverConfirm(drivers[i]));
 }
 
 function renderDriversPager() {
-    document.getElementById('driversPagerInfo').textContent = `Página ${driversPage} / ${driversTotalPages}`;
-    document.getElementById('driversPrev').disabled = driversPage <= 1;
-    document.getElementById('driversNext').disabled = driversPage >= driversTotalPages;
+    const info = document.getElementById('driversPagerInfo');
+    if (info) info.textContent = `Página ${driversPage} / ${driversTotalPages}`;
+    const prev = document.getElementById('driversPrev');
+    const next = document.getElementById('driversNext');
+    if (prev) prev.disabled = driversPage <= 1;
+    if (next) next.disabled = driversPage >= driversTotalPages;
 }
 
 async function deleteDriverConfirm(driver) {

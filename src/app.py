@@ -1,7 +1,10 @@
 from flask import Flask, render_template, Response, request, jsonify
 from flask_socketio import SocketIO
-from src.models import db, Driver, Session, Lap
+from src.models import (db, Driver, Session, Lap,
+                        Championship, Season, RaceEvent,
+                        SeasonRegistration, RaceRegistration, Track)
 from src.detector import RaceSystem
+from datetime import datetime
 from src import camera_config_store as camcfg
 from flask_migrate import Migrate
 import eventlet
@@ -98,6 +101,52 @@ def index():
     drivers = Driver.query.all()
     return render_template('index.html', drivers=drivers)
 
+
+@app.route('/drivers')
+def drivers_list():
+    # Página central de gestión de pilotos
+    # Proporcionamos la lista para renderizado inicial (paginación ligera en frontend)
+    drivers = Driver.query.order_by(Driver.nickname).all()
+    return render_template('drivers.html', drivers=drivers)
+
+
+@app.route('/drivers/<int:driver_id>')
+def driver_detail(driver_id):
+    d = Driver.query.get_or_404(driver_id)
+    return render_template('driver_detail.html', driver=d)
+
+
+@app.route('/championships')
+def championships_list():
+    champs = Championship.query.order_by(Championship.created_at.desc()).all()
+    return render_template('championships.html', championships=champs)
+
+
+@app.route('/championships/<int:champ_id>')
+def championship_detail(champ_id):
+    champ = Championship.query.get_or_404(champ_id)
+    seasons = champ.seasons.order_by(Season.start_date.desc()).all()
+    return render_template('championship_detail.html', championship=champ, seasons=seasons)
+
+
+@app.route('/seasons/<int:season_id>')
+def season_detail(season_id):
+    season = Season.query.get_or_404(season_id)
+    races = season.races.order_by(RaceEvent.order).all()
+    # drivers eligible to register
+    drivers = Driver.query.order_by(Driver.nickname).all()
+    registrations = season.registrations.all()
+    return render_template('season_detail.html', season=season, races=races, drivers=drivers, registrations=registrations)
+
+
+@app.route('/races/<int:race_id>')
+def race_detail(race_id):
+    race = RaceEvent.query.get_or_404(race_id)
+    sessions = Session.query.filter_by(race_id=race.id).order_by(Session.start_time).all()
+    regs = race.registrations.all()
+    drivers = [r.driver for r in regs]
+    return render_template('race_detail.html', race=race, sessions=sessions, registrations=regs, drivers=drivers)
+
 @app.route('/api/drivers', methods=['POST'])
 def add_driver():
     data = request.json or {}
@@ -179,6 +228,148 @@ def delete_driver(driver_id):
         return jsonify({'status': 'deleted'})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/drivers/<int:driver_id>/stats', methods=['GET'])
+def api_driver_stats(driver_id):
+    try:
+        driver = Driver.query.get_or_404(driver_id)
+
+        # número de vueltas registradas en Lap
+        laps_count = Lap.query.filter_by(driver_id=driver_id).count()
+
+        # mejor tiempo de vuelta
+        best_lap_row = Lap.query.filter_by(driver_id=driver_id).order_by(Lap.lap_time.asc()).first()
+        best_lap = best_lap_row.lap_time if best_lap_row else None
+
+        # resumen adicional: promedio y total
+        from sqlalchemy import func
+        agg = db.session.query(func.count(Lap.id), func.avg(Lap.lap_time), func.sum(Lap.lap_time)).filter(Lap.driver_id==driver_id).first()
+        total_laps = int(agg[0]) if agg and agg[0] is not None else 0
+        avg_lap = float(agg[1]) if agg and agg[1] is not None else None
+        sum_lap = float(agg[2]) if agg and agg[2] is not None else None
+
+        # sesiones distintas donde ha marcado vueltas
+        sessions_count = db.session.query(func.count(func.distinct(Lap.session_id))).filter(Lap.driver_id==driver_id).scalar() or 0
+
+        # número de carreras (RaceRegistration) en las que figura
+        races_count = RaceRegistration.query.filter_by(driver_id=driver_id).count()
+
+        # número de carreras iniciadas
+        races_started = RaceRegistration.query.filter_by(driver_id=driver_id, did_start=True).count()
+
+        # número de podios (finish_position <= 3 y no null)
+        podiums_count = RaceRegistration.query.filter(RaceRegistration.driver_id==driver_id, RaceRegistration.finish_position.isnot(None), RaceRegistration.finish_position <= 3).count()
+
+        # campeonatos donde ha participado (a partir de SeasonRegistration & RaceRegistration -> season->championship)
+        # 1) temporadas inscritas
+        season_ids = [r.season_id for r in SeasonRegistration.query.filter_by(driver_id=driver_id).all()]
+        champs_from_seasons = Championship.query.join(Season).filter(Season.id.in_(season_ids)).with_entities(Championship.id).distinct().all()
+        champs_ids = {c[0] for c in champs_from_seasons}
+
+        # 2) carreras donde participó (RaceRegistration -> race -> season -> championship)
+        race_regs = RaceRegistration.query.filter_by(driver_id=driver_id).all()
+        for rr in race_regs:
+            if rr.race and rr.race.season and rr.race.season.championship:
+                champs_ids.add(rr.race.season.championship.id)
+
+        championships_count = len(champs_ids)
+
+        # Opcional: lista de campeonatos (id,name)
+        championships = []
+        if champs_ids:
+            chs = Championship.query.filter(Championship.id.in_(list(champs_ids))).all()
+            championships = [{'id':c.id, 'name': c.name} for c in chs]
+
+        return jsonify({'driver_id': driver_id, 'laps': laps_count, 'total_laps': total_laps, 'avg_lap': avg_lap, 'sum_lap': sum_lap, 'best_lap': best_lap, 'sessions_count': sessions_count, 'races': races_count, 'races_started': races_started, 'podiums': podiums_count, 'championships_count': championships_count, 'championships': championships})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/drivers/<int:driver_id>/laps', methods=['GET'])
+def api_driver_laps(driver_id):
+    try:
+        # Paginado simple
+        page = request.args.get('page', default=1, type=int)
+        per_page = request.args.get('per_page', default=50, type=int)
+
+        query = Lap.query.filter_by(driver_id=driver_id).order_by(Lap.timestamp.desc())
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+        items = []
+        for lap in pagination.items:
+            session = lap.session
+            race = None
+            season = None
+            championship = None
+            if session and getattr(session, 'race_event', None):
+                race = session.race_event
+                season = getattr(race, 'season', None)
+                championship = getattr(season, 'championship', None) if season else None
+
+            items.append({
+                'id': lap.id,
+                'session_id': lap.session_id,
+                'session_type': session.type if session else None,
+                'race_id': race.id if race else None,
+                'race_name': race.name if race else None,
+                'season_id': season.id if season else None,
+                'season_name': season.name if season else None,
+                'championship_id': championship.id if championship else None,
+                'championship_name': championship.name if championship else None,
+                'lap_number': lap.lap_number,
+                'lap_time': lap.lap_time,
+                'timestamp': lap.timestamp.isoformat() if lap.timestamp else None,
+                'is_valid': lap.is_valid
+            })
+
+        return jsonify({'items': items, 'page': pagination.page, 'per_page': pagination.per_page, 'pages': pagination.pages, 'total': pagination.total})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/drivers/<int:driver_id>/participations', methods=['GET'])
+def api_driver_participations(driver_id):
+    try:
+        # devuelve RaceRegistration rows con info de race/season/championship
+        regs = RaceRegistration.query.filter_by(driver_id=driver_id).all()
+        items = []
+        for r in regs:
+            race = r.race
+            season = getattr(race, 'season', None) if race else None
+            championship = getattr(season, 'championship', None) if season else None
+            items.append({
+                'id': r.id,
+                'race_id': r.race_id,
+                'race_name': race.name if race else None,
+                'season_id': season.id if season else None,
+                'season_name': season.name if season else None,
+                'championship_id': championship.id if championship else None,
+                'championship_name': championship.name if championship else None,
+                'confirmed': r.confirmed,
+                'did_start': r.did_start,
+                'finish_position': r.finish_position,
+                'points': r.points
+            })
+
+        return jsonify({'items': items})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/drivers/<int:driver_id>/history', methods=['GET'])
+def api_driver_history(driver_id):
+    try:
+        # Una vista agregada con laps y participations
+        laps = Lap.query.filter_by(driver_id=driver_id).order_by(Lap.timestamp.desc()).limit(200).all()
+        regs = RaceRegistration.query.filter_by(driver_id=driver_id).all()
+
+        lap_items = [{'id': l.id, 'lap_number': l.lap_number, 'lap_time': l.lap_time, 'timestamp': l.timestamp.isoformat(), 'session_id': l.session_id} for l in laps]
+        regs_items = [{'id': r.id, 'race_id': r.race_id, 'confirmed': r.confirmed, 'did_start': r.did_start, 'finish_position': r.finish_position, 'points': r.points} for r in regs]
+
+        return jsonify({'laps': lap_items, 'participations': regs_items})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/detector/start', methods=['POST'])
@@ -285,7 +476,11 @@ def start_session():
         s.is_active = False
     
     # Nueva sesión
-    new_session = Session(type='race')
+    # Opcional: si se especifica race_id y type en POST JSON, se asignan
+    payload = request.get_json(silent=True) or {}
+    s_type = payload.get('type', 'race')
+    race_id = payload.get('race_id')
+    new_session = Session(type=s_type, race_id=race_id)
     db.session.add(new_session)
     db.session.commit()
     
@@ -294,6 +489,135 @@ def start_session():
     
     socketio.emit('session_status', {'state': 'started'})
     return jsonify({'status': 'started', 'session_id': new_session.id})
+
+
+@app.route('/api/championships', methods=['GET', 'POST'])
+def api_championships():
+    if request.method == 'GET':
+        items = Championship.query.order_by(Championship.created_at.desc()).all()
+        return jsonify([{'id': c.id, 'name': c.name, 'description': c.description} for c in items])
+
+    data = request.json or {}
+    try:
+        c = Championship(name=data['name'], description=data.get('description'))
+        db.session.add(c)
+        db.session.commit()
+        return jsonify({'ok': True, 'id': c.id}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/seasons', methods=['POST'])
+def api_create_season():
+    data = request.json or {}
+    try:
+        season = Season(
+            championship_id = data.get('championship_id'),
+            name = data.get('name'),
+            year = data.get('year'),
+            settings = data.get('settings')
+        )
+        db.session.add(season)
+        db.session.commit()
+        return jsonify({'ok': True, 'id': season.id}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/races', methods=['POST'])
+def api_create_race():
+    data = request.json or {}
+    try:
+        race = RaceEvent(
+            season_id = data.get('season_id'),
+            name = data.get('name'),
+            track_id = data.get('track_id'),
+            scheduled_date = data.get('scheduled_date'),
+            order = data.get('order', 0),
+            settings = data.get('settings')
+        )
+        db.session.add(race)
+        db.session.commit()
+        return jsonify({'ok': True, 'id': race.id}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/seasons/<int:season_id>/register', methods=['POST'])
+def api_register_season(season_id):
+    data = request.json or {}
+    try:
+        driver_id = data['driver_id']
+        number = data.get('number')
+        existing = SeasonRegistration.query.filter_by(season_id=season_id, driver_id=driver_id).first()
+        if existing:
+            existing.active = True
+            db.session.commit()
+            return jsonify({'ok': True, 'id': existing.id})
+
+        reg = SeasonRegistration(season_id=season_id, driver_id=driver_id, number=number)
+        db.session.add(reg)
+        db.session.commit()
+        return jsonify({'ok': True, 'id': reg.id}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/races/<int:race_id>/sessions', methods=['POST'])
+def api_create_race_session(race_id):
+    data = request.json or {}
+    try:
+        s_type = data.get('type') or 'practice'
+        start_time = data.get('start_time')
+        max_laps = data.get('max_laps')
+        duration = data.get('duration')
+        new_s = Session(type=s_type, race_id=race_id)
+        if start_time:
+            try:
+                new_s.start_time = datetime.fromisoformat(start_time)
+            except Exception:
+                pass
+        if max_laps is not None:
+            new_s.max_laps = int(max_laps)
+        if duration is not None:
+            new_s.duration = int(duration)
+
+        db.session.add(new_s)
+        db.session.commit()
+        return jsonify({'ok': True, 'id': new_s.id}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/sessions/<int:session_id>/stop', methods=['POST'])
+def api_stop_session(session_id):
+    try:
+        s = Session.query.get_or_404(session_id)
+        s.is_active = False
+        db.session.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/races/<int:race_id>/register', methods=['POST'])
+def api_register_race(race_id):
+    data = request.json or {}
+    try:
+        driver_id = data['driver_id']
+        confirmed = bool(data.get('confirmed', True))
+        existing = RaceRegistration.query.filter_by(race_id=race_id, driver_id=driver_id).first()
+        if existing:
+            existing.confirmed = confirmed
+            db.session.commit()
+            return jsonify({'ok': True, 'id': existing.id})
+
+        reg = RaceRegistration(race_id=race_id, driver_id=driver_id, confirmed=confirmed)
+        db.session.add(reg)
+        db.session.commit()
+        return jsonify({'ok': True, 'id': reg.id}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 # Streaming de Video (MJPEG)
 def gen_frames():

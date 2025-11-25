@@ -1,0 +1,37 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="w-full p-4">
+    <h2 class="text-2xl font-bold mb-4">Campeonatos</h2>
+
+    <div class="mb-6">
+        <form id="createChampForm" class="flex gap-2">
+            <input name="name" id="champName" placeholder="Nombre campeonato" class="px-3 py-2 rounded bg-gray-700 text-white w-1/3" />
+            <input name="description" id="champDesc" placeholder="Descripción (opcional)" class="px-3 py-2 rounded bg-gray-700 text-white w-1/2" />
+            <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white" type="submit">Crear</button>
+        </form>
+    </div>
+
+    <div id="champList" class="grid gap-3">
+        {% for c in championships %}
+            <a href="/championships/{{ c.id }}" class="block p-3 bg-gray-800 rounded-lg hover:bg-gray-700">{{ c.name }} <span class="text-xs text-gray-400">{{ c.created_at }}</span></a>
+        {% else %}
+            <div class="text-gray-400">No hay campeonatos aún.</div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+document.getElementById('createChampForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('champName').value.trim();
+    const description = document.getElementById('champDesc').value.trim();
+    if (!name) return alert('Nombre requerido');
+    const resp = await fetch('/api/championships', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name, description}) });
+    const data = await resp.json();
+    if (resp.ok) location.reload();
+    else alert('Error: ' + (data.error || resp.statusText));
+});
+</script>
+
+{% endblock %}

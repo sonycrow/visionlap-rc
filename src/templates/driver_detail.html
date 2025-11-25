@@ -1,0 +1,113 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="p-4 w-full">
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h2 class="text-2xl font-bold">{{ driver.name }} <span class="text-sm text-gray-400">({{ driver.nickname }})</span></h2>
+            <div class="text-xs text-gray-400">Tag ID: {{ driver.tag_id }} • Registrado: {{ driver.created_at }}</div>
+        </div>
+        <div>
+            <a href="/drivers" class="px-3 py-2 bg-gray-700 rounded text-white">Volver</a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-4 mb-4">
+        <div class="col-span-2 bg-gray-800 rounded p-3">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-semibold">Historial y actividad</h3>
+                <div class="text-sm text-gray-400" id="lastUpdate">Cargando...</div>
+            </div>
+
+            <div class="tabs mb-3 flex gap-2">
+                <button id="tab-laps" class="px-3 py-1 bg-indigo-600 rounded">Vueltas</button>
+                <button id="tab-participations" class="px-3 py-1 bg-gray-700 rounded">Participaciones</button>
+            </div>
+
+            <div id="content-laps" class="content-section">
+                <table class="w-full text-sm text-left">
+                    <thead><tr><th>#</th><th>Tipo</th><th>Carrera</th><th>Tiempo (s)</th><th>Timestamp</th></tr></thead>
+                    <tbody id="lapsTableBody"></tbody>
+                </table>
+                <div id="lapsPager" class="mt-3 flex justify-between items-center text-xs text-gray-400"></div>
+            </div>
+
+            <div id="content-participations" class="content-section hidden">
+                <table class="w-full text-sm text-left">
+                    <thead><tr><th>Carrera</th><th>Temporada</th><th>Campeonato</th><th>Confirmado</th><th>Inicio</th><th>Posición</th><th>Puntos</th></tr></thead>
+                    <tbody id="participationsBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="col-span-1 bg-gray-800 rounded p-3">
+            <h3 class="font-semibold mb-2">Resumen</h3>
+            <div id="summaryBox" class="text-sm text-gray-300">
+                Cargando estadísticas...
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const driverId = {{ driver.id }};
+
+async function loadSummary() {
+    const resp = await fetch(`/api/drivers/${driverId}/stats`);
+    const data = await resp.json();
+    if (!resp.ok) return document.getElementById('summaryBox').textContent = 'Error cargando estadisticas';
+    document.getElementById('summaryBox').innerHTML = `
+        <div>Vueltas registradas: <strong>${data.laps}</strong></div>
+        <div>Mejor vuelta: <strong>${data.best_lap ? data.best_lap.toFixed(3) + ' s' : '-'}</strong></div>
+        <div>Vueltas totales: <strong>${data.total_laps ?? data.laps}</strong></div>
+        <div>Tiempo total en vueltas: <strong>${data.sum_lap ? data.sum_lap.toFixed(3)+' s' : '-'}</strong></div>
+        <div>Promedio vuelta: <strong>${data.avg_lap ? data.avg_lap.toFixed(3)+' s' : '-'}</strong></div>
+        <div>Sesiones con vueltas: <strong>${data.sessions_count ?? '-'}</strong></div>
+        <div>Carreras inscritas: <strong>${data.races}</strong></div>
+        <div>Carreras iniciadas: <strong>${data.races_started ?? 0}</strong></div>
+        <div>Podios: <strong>${data.podiums}</strong></div>
+        <div>Campeonatos: <strong>${data.championships_count}</strong></div>
+    `;
+}
+
+let lapsPage = 1, lapsPer = 50;
+async function loadLaps(page=1) {
+    const resp = await fetch(`/api/drivers/${driverId}/laps?page=${page}&per_page=${lapsPer}`);
+    const data = await resp.json();
+    if (!resp.ok) return; // ignore errors for now
+
+    const body = document.getElementById('lapsTableBody');
+    body.innerHTML = (data.items || []).map(l => `
+        <tr class="border-t border-gray-700"><td>${l.lap_number}</td><td>${l.session_type || '-'}</td><td>${l.race_name || '-'}</td><td>${l.lap_time.toFixed(3)}</td><td>${l.timestamp}</td></tr>
+    `).join('');
+
+    document.getElementById('lapsPager').textContent = `Página ${data.page} / ${data.pages} • ${data.total} vueltas`;
+    lapsPage = data.page;
+}
+
+async function loadParticipations() {
+    const resp = await fetch(`/api/drivers/${driverId}/participations`);
+    const data = await resp.json();
+    if (!resp.ok) return;
+
+    const body = document.getElementById('participationsBody');
+    body.innerHTML = (data.items || []).map(p => `
+        <tr class="border-t border-gray-700"><td>${p.race_name || '-'}</td><td>${p.season_name || '-'}</td><td>${p.championship_name || '-'}</td><td>${p.confirmed ? 'Sí':'No'}</td><td>${p.did_start ? 'Sí' : 'No'}</td><td>${p.finish_position || '-'}</td><td>${p.points || '-'}</td></tr>
+    `).join('');
+}
+
+// Tabs
+document.getElementById('tab-laps')?.addEventListener('click', () => { document.getElementById('content-laps').classList.remove('hidden'); document.getElementById('content-participations').classList.add('hidden'); });
+document.getElementById('tab-participations')?.addEventListener('click', () => { document.getElementById('content-laps').classList.add('hidden'); document.getElementById('content-participations').classList.remove('hidden'); });
+
+// pager prev/next handling
+document.getElementById('lapsPager')?.addEventListener('click', (e) => {
+    // not interactive yet, could add prev/next buttons later
+});
+
+// inicializar
+loadSummary(); loadLaps(); loadParticipations();
+document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
+</script>
+
+{% endblock %}

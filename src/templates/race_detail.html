@@ -1,0 +1,90 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="p-4 w-full">
+    <h2 class="text-2xl font-bold mb-4">{{ race.name }}</h2>
+    <p class="text-sm text-gray-400 mb-4">Temporizada: {{ race.scheduled_date }}</p>
+
+    <div class="grid grid-cols-2 gap-6">
+        <div>
+            <h3 class="text-lg font-semibold mb-2">Sesiones</h3>
+            <form id="createSessionForm" class="flex gap-2 mb-4">
+                <select id="sessionType" class="px-3 py-2 rounded bg-gray-700 text-white">
+                    <option value="practice">Práctica</option>
+                    <option value="qualy">Clasificación</option>
+                    <option value="race">Carrera</option>
+                </select>
+                <input id="sessionMaxLaps" type="number" placeholder="Vueltas máx" class="px-3 py-2 rounded bg-gray-700 text-white w-32" />
+                <button class="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white" type="submit">Crear sesión</button>
+            </form>
+
+            <div class="space-y-2">
+                {% for s in sessions %}
+                    <div class="p-3 bg-gray-800 rounded flex justify-between items-center">
+                        <div>
+                            <div class="text-sm">{{ s.type }} — {{ s.start_time }}</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="startSessionWith({{ s.id }})" class="px-2 py-1 bg-green-600 rounded text-xs">Iniciar</button>
+                            <button onclick="fetch('/api/sessions/{{ s.id }}/stop', {method:'POST'})" class="px-2 py-1 bg-red-600 rounded text-xs">Detener</button>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="text-gray-400">No hay sesiones creadas.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div>
+            <h3 class="text-lg font-semibold mb-2">Inscripciones</h3>
+            <form id="registerRaceForm" class="flex gap-2 mb-3">
+                <select id="driverRaceSelect" class="px-3 py-2 rounded bg-gray-700 text-white w-2/3">
+                    <option value="">-- seleccionar piloto --</option>
+                    {% for d in drivers %}
+                        <option value="{{ d.id }}">{{ d.nickname }} — {{ d.name }}</option>
+                    {% endfor %}
+                </select>
+                <button class="px-3 py-2 bg-green-600 hover:bg-green-700 rounded text-white" type="submit">Registrar</button>
+            </form>
+
+            <div class="bg-gray-800 rounded p-3">
+                <h4 class="text-sm font-semibold mb-2">Pilotos inscritos</h4>
+                <ul class="space-y-1 text-sm text-gray-300">
+                    {% for reg in registrations %}
+                        <li>{{ reg.driver.nickname }} ({{ reg.driver.name }}) — Conf: {{ reg.confirmed }}</li>
+                    {% else %}
+                        <li class="text-gray-400">Ninguno</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('createSessionForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const type = document.getElementById('sessionType').value;
+    const max_laps = parseInt(document.getElementById('sessionMaxLaps').value) || null;
+    const resp = await fetch('/api/races/{{ race.id }}/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, max_laps }) });
+    if (resp.ok) location.reload();
+    else alert('Error creando sesión');
+});
+
+document.getElementById('registerRaceForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const driver_id = document.getElementById('driverRaceSelect').value;
+    if (!driver_id) return alert('Selecciona piloto');
+    const resp = await fetch('/api/races/{{ race.id }}/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ driver_id }) });
+    if (resp.ok) location.reload();
+    else alert('Error registrando piloto');
+});
+
+function startSessionWith(sessionId) {
+    // Inicia sesión en el detector vinculada a questa sesión
+    fetch('/api/session/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ type: 'custom', race_id: {{ race.id }}}) })
+        .then(r => r.json()).then(d => console.log(d)).catch(e => alert('Error iniciando sesión'));
+}
+</script>
+
+{% endblock %}
